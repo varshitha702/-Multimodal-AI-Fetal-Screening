@@ -1,0 +1,11 @@
+E01 PASS  empty state, disclaimer and 'Model ready' status visible
+E02 PASS  pixel spacing auto-filled (0.06560565 mm/px)
+E03 PASS  results shown: HC 67.3 mm vs reference 67.84 mm
+E04 PASS  print report renders (screenshot + PDF)
+E05 PASS  dark theme toggles
+E06 PASS  corrupted upload shows the API's 400 message
+E07 PASS  wrong file type rejected in the browser
+E08 PASS  model page shows held-out test metrics
+E09 PASS  mobile (390 px): results render, no horizontal scroll
+E10 PASS  Swagger UI lists the endpoints
+10 UI checks passed
