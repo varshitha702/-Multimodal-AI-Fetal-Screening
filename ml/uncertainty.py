@@ -102,7 +102,11 @@ def tta_predict(segmenter, gray: np.ndarray, pixel_size_mm: float | None,
     size = segmenter.image_size
     x = preprocess(gray, size)
     batch = torch.from_numpy(np.stack([apply(x, t) for t in transforms]))[:, None].to(segmenter.device)
-    probs = torch.sigmoid(segmenter.model(batch))[:, 0].float().cpu().numpy()
+    # One batch on the GPU. On the CPU a batch of 8 at 256 px took 2.7 s vs 71 ms for one image (fresh process,
+    # this laptop), i.e. ~5x slower than 8 single passes, so the passes run one at a time there.
+    chunk = len(transforms) if batch.device.type == "cuda" else 1
+    logits = torch.cat([segmenter.model(batch[i:i + chunk]) for i in range(0, len(batch), chunk)])
+    probs = torch.sigmoid(logits)[:, 0].float().cpu().numpy()
     identity = probs[0]
     maps = []
     for p, t in zip(probs, transforms, strict=True):
