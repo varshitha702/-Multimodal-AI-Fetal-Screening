@@ -1,0 +1,28 @@
+# FetalAI: backend (FastAPI, CPU) + frontend (Next.js).
+# Prerequisite: the trained checkpoint at outputs/hc18_unet_best.pth (python -m ml.train).
+#   docker compose up --build
+#   -> web app http://localhost:3000, API docs http://localhost:8000/docs
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./outputs/hc18_unet_best.pth:/models/hc18_unet_best.pth:ro
+    environment:
+      FETALAI_CORS_ORIGINS: '["http://localhost:3000","http://127.0.0.1:3000"]'
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
