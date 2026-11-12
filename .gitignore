@@ -1,27 +1,20 @@
 
-# Python
-__pycache__/
-*.py[cod]
 .venv/
 venv/
+__pycache__/
+*.pyc
 .env
 
-# Dataset: do not upload ultrasound data
 data/raw/
 data/processed/
 
-# Model checkpoints
 *.pth
 *.pt
 *.ckpt
 
-# Training outputs
 outputs/*.tmp
 
-# IDE
 .vscode/
 .idea/
-
-# System
 .DS_Store
 Thumbs.db

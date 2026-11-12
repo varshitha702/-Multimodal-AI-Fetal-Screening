@@ -1,0 +1,17 @@
+{
+    "architecture": "HC18 U-Net",
+    "dataset": "HC18",
+    "image_size": 128,
+    "batch_size": 1,
+    "epochs_completed": 2,
+    "best_validation_dice": 1.0,
+    "latest_train_loss": 1.003304627686739,
+    "latest_train_dice": 1.0,
+    "latest_validation_loss": 1.0015093711153347,
+    "latest_validation_dice": 1.0,
+    "training_samples": 800,
+    "validation_samples": 199,
+    "device": "cpu",
+    "split_strategy": "random_image_level",
+    "clinical_validity": "Not established. Research prototype only."
+}
