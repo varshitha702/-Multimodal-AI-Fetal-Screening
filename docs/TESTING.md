@@ -8,12 +8,16 @@ Raw logs: `docs/evidence/pytest_run.txt`, `docs/evidence/frontend_smoke_run.txt`
 
 | Suite | Tool | Cases | Passed | Failed | Skipped |
 |---|---|---|---|---|---|
-| Backend API (T01–T25) | pytest + FastAPI TestClient | 31 (T18 and T24 have 4 inputs each) | 31 | 0 | 0 |
+| Backend API (T01–T32) | pytest + FastAPI TestClient | 38 (T18 and T24 have 4 inputs each) | 38 | 0 | 0 |
 | ML unit / integration (U01–U32) | pytest | 32 | 32 | 0 | 0 |
+| Plane quality gate (P01–P13) | pytest | 13 | 13 | 0 | 0 |
 | INTERGROWTH-21st verification (G01–G08) | pytest | 14 (incl. all 189 published table cells) | 14 | 0 | 0 |
 | Frontend smoke (S1–S3) | `node --test` against `next start` | 3 | 3 | 0 | 0 |
-| End-to-end UI (E01–E12) | Playwright + Chrome, live backend and GPU model | 12 | 12 | 0 | 0 |
-| **Total** | | **92** | **92** | **0** | **0** |
+| End-to-end UI (E01–E14) | Playwright + Chrome, live backend and GPU models | 14 | 14 | 0 | 0 |
+| **Total** | | **114** | **114** | **0** | **0** |
+
+Feature A (standard-plane gate) added T26–T32, P01–P13 and the plane steps in E03, E04, E12 and E13;
+the Python suite is **97 passed** locally (`docs/evidence/pytest_run.txt`).
 
 Static checks: `ruff check .` (Python) clean; `npm run lint`, `npm run typecheck`, `npm run build` clean.
 
@@ -63,6 +67,16 @@ python scripts/ui_e2e.py
 | T23 | Normal | GA but no pixel size | `growth` is `null` and a flag explains why | Pass |
 | T24 | Boundary/negative | GA = 13.9, 40.5, −1, `abc` | 422 (×4) | Pass |
 | T25 | Normal | `GET /reference/hc-centiles` | 53 points 14–40 weeks; 50th centile at 14 weeks = 97.9 mm (published) | Pass |
+| T26 | Normal | Plane checkpoint present | `/health` → `plane_model_loaded=true`; `/model-info` has `plane_classifier` | Pass |
+| T27 | Normal | Gate passes (threshold 0) | `plane_check.status=pass`, probabilities sum to 1, HC reported | Pass |
+| T28 | Normal | Gate warns (threshold > 1), pixel size + GA | `status=warn`, "please re-acquire" message, `measurement_withheld=true`; HC, area and centile `null`; overlay still returned | Pass |
+| T29 | Normal | Gate warns + `override_plane_check=true` | `overridden=true`, "Measured anyway", HC reported | Pass |
+| T30 | Boundary | No plane checkpoint | `status=unavailable`, measurement not withheld | Pass |
+| T31 | Normal/negative | `POST /plane-check` | 200 block (warn / unavailable); PDF → 415; junk bytes → 400 | Pass |
+| T32 | Negative | `override_plane_check=maybe` | 422 | Pass |
+
+The API tests use random-weight checkpoints written to a temp folder, so the gate outcome is forced through the
+stored threshold (0 → always pass, 1.01 → always warn). They test the contract, not classifier accuracy.
 
 ## INTERGROWTH-21st verification (`tests/test_intergrowth.py`)
 
@@ -118,6 +132,24 @@ intergrowth21.com `grow_fetal-zs_hc_table.pdf`).
 | U31 | test_inference | No pixel size → no HC | Pass |
 | U32 | test_inference | *data + checkpoint*: trained model within 10 mm on 5 held-out test images | Pass |
 
+## Plane quality gate test cases (`tests/test_planes.py`)
+
+| ID | Case | Result |
+|---|---|---|
+| P01 | Letterbox keeps the aspect ratio and pads with black | Pass |
+| P02 | ImageNet normalisation gives the same result for uint8 and float input | Pass |
+| P03 | Temperature scaling recovers a known over-confidence factor (T ≈ 3) | Pass |
+| P04 | ECE is 0 for calibrated and 0.24 for over-confident toy predictions | Pass |
+| P05 | Gate score = P(brain) × P(TT \| brain) | Pass |
+| P06 | Threshold rule meets the target TT recall and is the largest such threshold | Pass |
+| P07 | GPU augmentation keeps shape and range | Pass |
+| P08 | Official CSV parsing (`;`, trailing-space column), labels and sub-labels | Pass |
+| P09 | Split: official test untouched, train/val patient-disjoint, deterministic | Pass |
+| P10 | `PlaneClassifier.check` probabilities, pass decision and sub-plane only for brain | Pass |
+| P11 | Colour (3-D) input rejected | Pass |
+| P12 | Unknown plane label rejected | Pass |
+| P13 | Split file round trip | Pass |
+
 ## Frontend smoke test (`frontend/tests/smoke.test.mjs`)
 
 | ID | Case | Result |
@@ -128,29 +160,33 @@ intergrowth21.com `grow_fetal-zs_hc_table.pdf`).
 
 ## End-to-end UI check (`scripts/ui_e2e.py`)
 
-Real Chrome, real backend, trained model on the GPU. Demo image `006_HC.png` is from the held-out test split.
+Real Chrome, real backend, trained models on the GPU. Demo image `006_HC.png` is from the held-out test split
+(reference HC 67.84 mm, an early-gestation image that the plane gate does **not** accept; see `MODEL_CARD.md`).
 
 | ID | Case | Result |
 |---|---|---|
 | E01 | Empty state, disclaimer and "Model ready" status visible | Pass |
 | E02 | Uploading an HC18 image auto-fills its pixel spacing (0.06560565 mm/px) | Pass |
-| E03 | Analyse → results; HC 67.3 mm vs reference 67.84 mm (asserted within 5 mm) | Pass |
-| E04 | Print report renders (screenshot + PDF) | Pass |
-| E05 | Dark theme toggles | Pass |
-| E06 | Corrupted upload shows the API's 400 message | Pass |
-| E07 | Wrong file type is rejected in the browser | Pass |
-| E08 | Model page shows held-out test metrics | Pass |
-| E09 | Mobile (390 px): results render, no horizontal scroll | Pass |
-| E10 | Gestational age outside 14–40 weeks rejected in the form (Analyse disabled) | Pass |
-| E11 | GA 20+0 (example input; HC18 has no GA) on `544_HC.png` → centile card (42nd) and centile chart | Pass |
-| E12 | Swagger UI lists the endpoints | Pass |
+| E03 | Analyse → plane-check WARN badge shown before the result; HC withheld | Pass |
+| E04 | "Measure anyway (override)" → HC 67.3 mm vs reference 67.84 mm (asserted within 5 mm), warning kept | Pass |
+| E05 | Print report renders (screenshot + PDF) | Pass |
+| E06 | Dark theme toggles | Pass |
+| E07 | Corrupted upload shows the API's 400 message | Pass |
+| E08 | Wrong file type is rejected in the browser | Pass |
+| E09 | Model page shows held-out test metrics (segmentation and plane gate) | Pass |
+| E10 | Mobile (390 px): results render, no horizontal scroll | Pass |
+| E11 | Gestational age outside 14–40 weeks rejected in the form (Analyse disabled) | Pass |
+| E12 | GA 20+0 (example input; HC18 has no GA) on `544_HC.png` → plane check PASS, centile card (42nd) and chart | Pass |
+| E13 | FETAL_PLANES_DB test femur image → plane check WARN ("femur"), HC withheld | Pass |
+| E14 | Swagger UI lists the endpoints | Pass |
 
-The same E01–E12 also pass against the **Docker Compose** stack (CPU backend container + frontend container):
+The Phase-1 E01–E12 (before the plane gate) also passed against the **Docker Compose** stack:
 `docs/evidence/ui_e2e_docker_run.txt`.
 
 ## Model evaluation
 
-Held-out test metrics (Dice 0.973, HC MAE 2.18 mm) are documented in [`MODEL_CARD.md`](MODEL_CARD.md).
+Held-out test metrics (Dice 0.973, HC MAE 2.18 mm; plane gate accuracy 94.0 %, TT acceptance 95.7 %) are
+documented in [`MODEL_CARD.md`](MODEL_CARD.md).
 
 ## Known issues
 
