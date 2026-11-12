@@ -1,16 +1,16 @@
-  File "C:\Users\vishw\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages\playwright\_impl\_assertions.py", line 648, in to_have_text
-    await self._expect_impl(
-  File "C:\Users\vishw\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages\playwright\_impl\_assertions.py", line 128, in _expect_impl
-    _record_soft_or_raise(
-  File "C:\Users\vishw\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages\playwright\_impl\_assertions.py", line 60, in _record_soft_or_raise
-    raise error
-AssertionError: Locator expected to have text 're.compile('Model ready')'
-Actual value: Checking API… 
-Call log:
-  - Expect "to_have_text" with timeout 15000ms
-  - waiting for get_by_test_id("api-status")
-    33 × locator resolved to <span data-testid="api-status" title="FastAPI backend status" class="hidden items-center gap-2 rounded-full border px-3 py-1 text-xs sm:inline-flex">…</span>
-       - unexpected value "Checking API…"
-
-Aria snapshot:
-- text: Checking API…
+# python scripts/ui_e2e.py  (backend + next start on this laptop, 2026-11-12)
+E01 PASS  empty state, disclaimer and 'Model ready' status visible
+E02 PASS  pixel spacing auto-filled (0.06560565 mm/px)
+E03 PASS  006_HC.png: plane check WARN shown before the result, HC withheld
+E04 PASS  override: HC 67.3 mm vs reference 67.84 mm, warning kept
+E05 PASS  print report renders (screenshot + PDF)
+E06 PASS  dark theme toggles
+E07 PASS  corrupted upload shows the API's 400 message
+E08 PASS  wrong file type rejected in the browser
+E09 PASS  model page shows held-out test metrics
+E10 PASS  mobile (390 px): results render, no horizontal scroll
+E11 PASS  GA outside 14-40 weeks rejected in the form (button disabled)
+E12 PASS  GA 20+0 on 544_HC.png: plane check PASS, centile card (42nd) and chart shown
+E13 PASS  femur image Patient00647_Plane5_1_of_1.png: plane check WARN ('femur'), HC withheld
+E14 PASS  Swagger UI lists the endpoints
+14 UI checks passed
