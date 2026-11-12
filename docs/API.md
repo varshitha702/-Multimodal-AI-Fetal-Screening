@@ -53,7 +53,8 @@ Example:
 ```bash
 curl -X POST http://localhost:8000/api/v1/predict \
   -F "file=@data/raw/HC18/training_set/006_HC.png;type=image/png" \
-  -F "pixel_size_mm=0.0656056482541"   -F "override_plane_check=true"
+  -F "pixel_size_mm=0.0656056482541" \
+  -F "override_plane_check=true"
 ```
 
 Response (200; base64 strings shortened). This is a real response for a held-out test image whose
