@@ -17,7 +17,8 @@ import sys
 APP_DIR = Path(__file__).resolve().parent
 BASE_DIR = APP_DIR.parent  # repository root
 sys.path.insert(0, str(BASE_DIR))
-from ml.model import UNet  # noqa: E402
+from ml.geometry import fit_ellipse_to_mask  # noqa: E402
+from ml.inference import Segmenter  # noqa: E402
 
 DATA_ROOT = BASE_DIR / "data" / "raw" / "HC18"
 IMAGE_DIR = DATA_ROOT / "training_set"
@@ -43,47 +44,31 @@ load_css()
 
 @st.cache_resource(show_spinner="Loading the HC18 segmentation model...")
 def load_model(checkpoint_path: str):
+    """Load the shared Segmenter once (same code path as the FastAPI backend and ml/evaluate.py)."""
     path = Path(checkpoint_path)
     if not path.exists():
         return None, None, "Checkpoint not found"
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = UNet().to(device)
     try:
-        try:
-            checkpoint = torch.load(path, map_location=device, weights_only=True)
-        except TypeError:
-            checkpoint = torch.load(path, map_location=device)
-        state = checkpoint.get("model_state_dict", checkpoint) if isinstance(checkpoint, dict) else checkpoint
-        model.load_state_dict(state)
-        model.eval()
-        return model, device, None
+        segmenter = Segmenter(path)
+        return segmenter, segmenter.device, None
     except Exception as exc:
-        return None, device, f"Checkpoint could not be loaded: {exc}"
+        return None, None, f"Checkpoint could not be loaded: {exc}"
 
 def run_segmentation(model, device, pil_image):
-    gray = pil_image.convert("L")
-    width, height = gray.size
-    resized = gray.resize((IMAGE_SIZE, IMAGE_SIZE), Image.Resampling.BILINEAR)
-    arr = np.asarray(resized, dtype=np.float32) / 255.0
-    tensor = torch.from_numpy(arr.copy()).unsqueeze(0).unsqueeze(0).to(device)
-    with torch.inference_mode():
-        probability_small = torch.sigmoid(model(tensor))[0, 0].cpu().numpy()
-    binary_small = (probability_small > 0.5).astype(np.uint8) * 255
-    contours, _ = cv2.findContours(binary_small, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    cleaned = np.zeros_like(binary_small)
-    if contours:
-        largest = max(contours, key=cv2.contourArea)
-        if cv2.contourArea(largest) > 0:
-            cv2.drawContours(cleaned, [largest], -1, 255, thickness=cv2.FILLED)
-    mask = cv2.resize(cleaned, (width, height), interpolation=cv2.INTER_NEAREST)
-    probability = cv2.resize(probability_small, (width, height), interpolation=cv2.INTER_LINEAR)
+    gray = np.asarray(pil_image.convert("L"), dtype=np.uint8)
+    pred = model.predict(gray)
+    mask = (pred.mask * 255).astype(np.uint8)
     original = np.asarray(pil_image.convert("RGB")).copy()
     tint = np.zeros_like(original)
     tint[:, :, 1] = mask
     overlay = cv2.addWeighted(original, 1.0, tint, 0.38, 0)
-    heatmap = cv2.applyColorMap(np.uint8(np.clip(probability, 0, 1) * 255), cv2.COLORMAP_TURBO)
+    if pred.ellipse is not None:
+        e = pred.ellipse
+        cv2.ellipse(overlay, ((e.cx, e.cy), (2 * e.semi_major, 2 * e.semi_minor), e.angle_deg),
+                    (250, 204, 21), 2, cv2.LINE_AA)
+    heatmap = cv2.applyColorMap(np.uint8(np.clip(pred.probability, 0, 1) * 255), cv2.COLORMAP_TURBO)
     heatmap = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
-    return mask, overlay, probability, heatmap
+    return mask, overlay, pred.probability, heatmap
 
 def png_bytes(array, mode=None):
     buffer = BytesIO()
@@ -91,20 +76,15 @@ def png_bytes(array, mode=None):
     return buffer.getvalue()
 
 def contour_perimeter(mask, spacing_mm):
-    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-    if not contours:
-        return None
-    contour = max(contours, key=cv2.contourArea).reshape(-1, 2).astype(np.float32)
-    if len(contour) < 5:
-        return None
-    scaled = contour * float(spacing_mm)
-    return float(cv2.arcLength(scaled.reshape(-1, 1, 2), True))
+    """Head circumference: perimeter of the ellipse fitted to the mask (Ramanujan) x spacing."""
+    fit = fit_ellipse_to_mask(mask)
+    return fit.hc_mm(float(spacing_mm)) if fit is not None else None
 
 def dataset_audit():
     images = list(IMAGE_DIR.glob("*HC.png")) if IMAGE_DIR.exists() else []
     masks = list(IMAGE_DIR.glob("*HC_Annotation.png")) if IMAGE_DIR.exists() else []
-    image_ids = {p.stem.removesuffix("_HC") for p in images}
-    mask_ids = {p.stem.removesuffix("_HC_Annotation") for p in masks}
+    image_ids = {p.stem for p in images}
+    mask_ids = {p.stem.removesuffix("_Annotation") for p in masks}
     csv_ok = CSV_PATH.exists()
     csv_rows = None
     csv_columns = []
@@ -163,11 +143,11 @@ def build_pdf(details, filename, image=None, overlay=None, perimeter=None, spaci
         "anatomy, or overall fetal health.", styles["Foot"]))
     if perimeter is not None:
         story.append(Paragraph(
-            f"Predicted-mask contour perimeter: {perimeter:.2f} mm, using entered spacing "
+            f"Head circumference (ellipse fit): {perimeter:.2f} mm, using entered spacing "
             f"of {spacing} mm/pixel. This is not a clinically validated head-circumference measurement.",
             styles["BodyText"]))
     else:
-        story.append(Paragraph("No perimeter in millimetres was calculated.", styles["BodyText"]))
+        story.append(Paragraph("No head circumference was calculated (no pixel spacing given).", styles["BodyText"]))
     for heading, arr in [("Uploaded image", image), ("Segmentation overlay", overlay)]:
         if arr is not None:
             story += [Spacer(1, 4*mm), Paragraph(heading, styles["Heading3"])]
@@ -295,8 +275,8 @@ elif page == "Ultrasound analysis":
         m1, m2, m3 = st.columns(3)
         m1.metric("Image dimensions", f'{result["width"]} × {result["height"]} px')
         m2.metric("Inference device", str(device).upper())
-        m3.metric("Contour perimeter", f"{perimeter:.2f} mm" if perimeter is not None else "Not calculated")
-        st.caption("A contour perimeter is a geometric estimate and must not be represented as a validated fetal head-circumference measurement.")
+        m3.metric("Head circumference", f"{perimeter:.2f} mm" if perimeter is not None else "Not calculated")
+        st.caption("HC = perimeter of the ellipse fitted to the predicted mask x pixel spacing, the same method as the API (test-split MAE 2.18 mm). Research use only.")
         details = st.session_state.get("report_details", {})
         st.markdown("### Report details for the PDF summary")
         st.caption("These values are manually transcribed from an existing report. They are not AI predictions.")
