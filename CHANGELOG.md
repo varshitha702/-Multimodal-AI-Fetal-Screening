@@ -27,6 +27,8 @@ All notable changes are listed here. Format: [Keep a Changelog](https://keepacha
   Lancet 2014), verified against all 189 cells of the official table; centile chart and report section;
   `/api/v1/reference/hc-centiles` (#10).
 
+- Docker Compose for backend (CPU) + frontend, verified with the end-to-end UI check (#11).
+
 ### Changed
 - Repository reorganised into `ml/`, `backend/`, `frontend/`, `dashboard/`, `scripts/`, `tests/`, `docs/` (#2).
 

@@ -78,6 +78,14 @@ npm install
 npm run dev
 ```
 
+### Or with Docker (backend on CPU + frontend)
+
+Needs Docker Desktop and the trained checkpoint at `outputs/hc18_unet_best.pth` (mounted read-only):
+
+```powershell
+docker compose up --build      # web app http://localhost:3000, API docs http://localhost:8000/docs
+```
+
 Optional research dashboard: `streamlit run dashboard\app.py`. Tests: `python -m pytest` and see
 [`docs/TESTING.md`](docs/TESTING.md).
 

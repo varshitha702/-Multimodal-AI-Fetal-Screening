@@ -145,6 +145,9 @@ Real Chrome, real backend, trained model on the GPU. Demo image `006_HC.png` is 
 | E11 | GA 20+0 (example input; HC18 has no GA) on `544_HC.png` → centile card (42nd) and centile chart | Pass |
 | E12 | Swagger UI lists the endpoints | Pass |
 
+The same E01–E12 also pass against the **Docker Compose** stack (CPU backend container + frontend container):
+`docs/evidence/ui_e2e_docker_run.txt`.
+
 ## Model evaluation
 
 Held-out test metrics (Dice 0.973, HC MAE 2.18 mm) are documented in [`MODEL_CARD.md`](MODEL_CARD.md).

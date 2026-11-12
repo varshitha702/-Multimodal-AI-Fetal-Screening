@@ -12,9 +12,9 @@
 | Next.js frontend with report, light/dark, responsive | Done | `docs/screenshots/ui_*.png` |
 | Tests + CI (pytest, smoke, end-to-end, GitHub Actions) | Done | `docs/TESTING.md` |
 | Documentation (architecture, model card, dataset card, ADRs) | Done | `docs/` |
+| Docker Compose (backend CPU + frontend), verified end to end | Done | `docker-compose.yml` |
 | HC-for-gestational-age centile (INTERGROWTH-21st), verified against the published table | Done | `ml/intergrowth.py`, `tests/test_intergrowth.py` |
 
-Item 9 of the Phase-1 brief (Docker Compose) was optional; its final status is recorded in `docs/HANDOFF.md`.
 
 ## Phase 2 (remaining 30 %)
 
@@ -30,5 +30,5 @@ Item 9 of the Phase-1 brief (Docker Compose) was optional; its final status is r
    Only with an equation taken from its cited source and unit-tested against that source's published values.
 6. **Optimisation.** ONNX export, TensorRT / ONNX Runtime inference, CPU-only deployment profile.
 7. **Persistence and security.** PostgreSQL history of analyses, JWT authentication, audit log.
-8. **Deployment.** Docker Compose for backend + frontend (if not completed in Phase 1), then cloud deployment.
+8. **Deployment.** Cloud deployment of the Docker Compose stack (GPU image optional).
 9. **Usability study** with clinicians (task-based evaluation of the UI and report).

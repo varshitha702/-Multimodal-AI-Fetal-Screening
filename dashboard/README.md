@@ -1,7 +1,16 @@
-# Deployment notes
+# dashboard/: Streamlit research dashboard (fallback UI)
 
-For Streamlit Community Cloud, select `app.py` as the entry point and use `requirements-live.txt`.
+A research workspace kept alongside the Next.js app. It runs the **same** inference code as the API
+(`ml.inference.Segmenter`), so its HC values match the API exactly.
 
-The trained checkpoint is not included in this project bundle. Provide `outputs/hc18_unet_best.pth` through an appropriate private/model-artifact workflow before expecting segmentation to run. Do not commit identifiable ultrasound images or patient information.
+```powershell
+# from the repository root, with the trained checkpoint at outputs/hc18_unet_best.pth
+streamlit run dashboard\app.py
+# or: scripts\run_dashboard.bat
+```
 
-The current project is a research prototype only, not a medical device.
+Pages: overview, analysis (upload, overlay, mask, probability heatmap, HC by ellipse fit, PDF summary),
+dataset audit, model information, about.
+
+The checkpoint is not committed; generate it with `python -m ml.train`. Do not upload identifiable patient
+data. Academic research prototype, not a medical device.
