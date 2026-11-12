@@ -12,9 +12,9 @@
 | Next.js frontend with report, light/dark, responsive | Done | `docs/screenshots/ui_*.png` |
 | Tests + CI (pytest, smoke, end-to-end, GitHub Actions) | Done | `docs/TESTING.md` |
 | Documentation (architecture, model card, dataset card, ADRs) | Done | `docs/` |
+| HC-for-gestational-age centile (INTERGROWTH-21st), verified against the published table | Done | `ml/intergrowth.py`, `tests/test_intergrowth.py` |
 
-Items 5 (gestational-age centiles) and 9 (Docker Compose) of the Phase-1 brief were optional "if time
-allows"; their final status is recorded in `docs/HANDOFF.md`.
+Item 9 of the Phase-1 brief (Docker Compose) was optional; its final status is recorded in `docs/HANDOFF.md`.
 
 ## Phase 2 (remaining 30 %)
 
@@ -26,9 +26,8 @@ allows"; their final status is recorded in `docs/HANDOFF.md`.
    to users; replace the heuristic quality flags with calibrated ones.
 4. **Stronger model and validation.** Pretrained-encoder U-Net (e.g. ResNet/EfficientNet encoder), k-fold
    cross-validation, external validation on another dataset.
-5. **Clinical context (if verified).** Gestational-age estimation / HC-for-GA centiles from a published
-   standard (e.g. INTERGROWTH-21st), implemented only with formulas taken from the cited source and unit-tested
-   against its published tables.
+5. **Gestational-age estimation from HC** (the reverse direction; HC-for-GA centiles are already done).
+   Only with an equation taken from its cited source and unit-tested against that source's published values.
 6. **Optimisation.** ONNX export, TensorRT / ONNX Runtime inference, CPU-only deployment profile.
 7. **Persistence and security.** PostgreSQL history of analyses, JWT authentication, audit log.
 8. **Deployment.** Docker Compose for backend + frontend (if not completed in Phase 1), then cloud deployment.

@@ -191,3 +191,39 @@ def test_T20_missing_checkpoint_gives_503_and_degraded_health(tmp_path):
         assert r.status_code == 503
         assert r.json()["error"]["code"] == "model_not_loaded"
         assert c.get("/api/v1/model-info").status_code == 503
+
+
+# --- gestational age / INTERGROWTH-21st centile ----------------------------------------------------
+
+def test_T21_ga_with_pixel_size_returns_growth_assessment(client):
+    body = post(client, png_bytes(), pixel_size_mm=0.2, gestational_age_weeks=22.0).json()
+    if body["head_circumference_mm"] is None:
+        pytest.skip("random weights produced no ellipse")
+    g = body["growth"]
+    assert g["gestational_age_weeks"] == 22.0
+    assert g["median_mm"] == 196.3  # published INTERGROWTH-21st median at 22 weeks
+    assert 0 <= g["centile"] <= 100 and "INTERGROWTH-21st" in g["reference"]
+
+
+def test_T22_no_ga_means_no_growth_block(client):
+    assert post(client, png_bytes(), pixel_size_mm=0.2).json()["growth"] is None
+
+
+def test_T23_ga_without_pixel_size_gives_flag_not_centile(client):
+    body = post(client, png_bytes(), gestational_age_weeks=30).json()
+    assert body["growth"] is None
+    assert any("centile needs HC" in f for f in body["quality"]["flags"])
+
+
+@pytest.mark.parametrize("value", ["13.9", "40.5", "-1", "abc"])
+def test_T24_ga_outside_standard_range_rejected_422(client, value):
+    r = client.post("/api/v1/predict", files={"file": ("a.png", png_bytes(), "image/png")},
+                    data={"gestational_age_weeks": value})
+    assert r.status_code == 422
+
+
+def test_T25_centile_curves_endpoint(client):
+    body = client.get("/api/v1/reference/hc-centiles").json()
+    pts = body["points"]
+    assert pts[0]["ga_weeks"] == 14 and pts[-1]["ga_weeks"] == 40 and len(pts) == 53
+    assert round(pts[0]["p50"], 1) == 97.9  # published median at 14 weeks

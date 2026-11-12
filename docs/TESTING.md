@@ -8,18 +8,19 @@ Raw logs: `docs/evidence/pytest_run.txt`, `docs/evidence/frontend_smoke_run.txt`
 
 | Suite | Tool | Cases | Passed | Failed | Skipped |
 |---|---|---|---|---|---|
-| Backend API (T01–T20) | pytest + FastAPI TestClient | 23 (T18 has 4 inputs) | 23 | 0 | 0 |
+| Backend API (T01–T25) | pytest + FastAPI TestClient | 31 (T18 and T24 have 4 inputs each) | 31 | 0 | 0 |
 | ML unit / integration (U01–U32) | pytest | 32 | 32 | 0 | 0 |
+| INTERGROWTH-21st verification (G01–G08) | pytest | 14 (incl. all 189 published table cells) | 14 | 0 | 0 |
 | Frontend smoke (S1–S3) | `node --test` against `next start` | 3 | 3 | 0 | 0 |
-| End-to-end UI (E01–E10) | Playwright + Chrome, live backend and GPU model | 10 | 10 | 0 | 0 |
-| **Total** | | **68** | **68** | **0** | **0** |
+| End-to-end UI (E01–E12) | Playwright + Chrome, live backend and GPU model | 12 | 12 | 0 | 0 |
+| **Total** | | **92** | **92** | **0** | **0** |
 
 Static checks: `ruff check .` (Python) clean; `npm run lint`, `npm run typecheck`, `npm run build` clean.
 
 Screenshot of the pytest run: `docs/screenshots/test_run_pytest.png`.
 
-**GitHub Actions CI** (PR #7, run 43235961106): Python job **51 passed, 4 skipped**, ruff clean; frontend job
-lint + build + smoke passed. The dataset and trained checkpoint are not in the repository, so the four tests
+**GitHub Actions CI** (run 43239985081): Python job **73 passed, 4 skipped** (51 + 4 skipped before step 5, run
+43235961106), ruff clean; frontend job lint + build + smoke passed. The dataset and trained checkpoint are not in the repository, so the four tests
 that need them (U05, U14, U27, U32, marked *data* below) are skipped in CI and run locally. The API tests never
 need them: they use a randomly initialised checkpoint created in a temp folder.
 
@@ -57,6 +58,28 @@ python scripts/ui_e2e.py
 | T18 | Negative | `pixel_size_mm` = −0.1, 0, 5, `abc` | 422 `validation_error` (×4) | Pass |
 | T19 | Negative | No file field | 422 | Pass |
 | T20 | Negative | Checkpoint missing | `/health` → `degraded`; `/predict` and `/model-info` → 503 `model_not_loaded` | Pass |
+| T21 | Normal | PNG + pixel size + GA 22.0 weeks | `growth` block; standard median 196.3 mm (published value at 22 weeks) | Pass |
+| T22 | Normal | No GA | `growth` is `null` | Pass |
+| T23 | Normal | GA but no pixel size | `growth` is `null` and a flag explains why | Pass |
+| T24 | Boundary/negative | GA = 13.9, 40.5, −1, `abc` | 422 (×4) | Pass |
+| T25 | Normal | `GET /reference/hc-centiles` | 53 points 14–40 weeks; 50th centile at 14 weeks = 97.9 mm (published) | Pass |
+
+## INTERGROWTH-21st verification (`tests/test_intergrowth.py`)
+
+Equations from Papageorghiou et al., *Lancet* 2014;384:869-79, Table 2; reference values from the official
+INTERGROWTH-21st table (`tests/data/intergrowth21_fetal_hc_zscores.csv`, transcribed from
+intergrowth21.com `grow_fetal-zs_hc_table.pdf`).
+
+| ID | Case | Result |
+|---|---|---|
+| G01 | All 189 published cells (14–40 weeks × z −3…+3) reproduced within 0.06 mm (185 identical after rounding to 0.1 mm; 4 differ by one rounding unit at .x5 boundaries) | Pass |
+| G02 | Published medians at 14, 20, 30, 40 weeks (×4) | Pass |
+| G03 | HC at the median → z = 0, 50th centile | Pass |
+| G04 | z ±1.88 ↔ 3rd / 97th centile | Pass |
+| G05 | HC at z = −2.5 is flagged outside the 3rd–97th range | Pass |
+| G06 | GA 13.9, 40.1, 0, −5 rejected (×4) | Pass |
+| G07 | SD increases with gestational age | Pass |
+| G08 | Centile curves cover 14–40 weeks and are ordered | Pass |
 
 ## ML test cases (`tests/test_*.py`)
 
@@ -118,7 +141,9 @@ Real Chrome, real backend, trained model on the GPU. Demo image `006_HC.png` is 
 | E07 | Wrong file type is rejected in the browser | Pass |
 | E08 | Model page shows held-out test metrics | Pass |
 | E09 | Mobile (390 px): results render, no horizontal scroll | Pass |
-| E10 | Swagger UI lists the endpoints | Pass |
+| E10 | Gestational age outside 14–40 weeks rejected in the form (Analyse disabled) | Pass |
+| E11 | GA 20+0 (example input; HC18 has no GA) on `544_HC.png` → centile card (42nd) and centile chart | Pass |
+| E12 | Swagger UI lists the endpoints | Pass |
 
 ## Model evaluation
 

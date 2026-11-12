@@ -20,6 +20,7 @@ WEB = "http://localhost:3000"
 API = "http://localhost:8000"
 TRAIN_DIR = ROOT / "data" / "raw" / "HC18" / "training_set"
 DEMO_IMAGE = "006_HC.png"  # from the held-out TEST split (reference HC 67.84 mm)
+GA_DEMO_IMAGE = "544_HC.png"  # held-out TEST split, reference HC 171.4 mm (within the 14-40 week range)
 
 
 def main() -> int:
@@ -114,7 +115,30 @@ def main() -> int:
         mpage.screenshot(path=SHOTS / "ui_mobile.png", full_page=True)
         checks.append("mobile (390 px): results render, no horizontal scroll")
 
-        # 10. Swagger docs
+        # 10. Gestational age -> INTERGROWTH-21st centile (HC18 has no GA; 20+0 is an example user input)
+        gpage = ctx.new_page()
+        gpage.on("pageerror", lambda e: errors.append(str(e)))
+        gpage.goto(WEB)
+        gpage.evaluate("localStorage.setItem('theme', 'light')")  # E05 left the shared context in dark mode
+        gpage.reload()
+        gpage.locator("#ga-weeks").fill("12")
+        gpage.get_by_test_id("file-input").set_input_files(TRAIN_DIR / GA_DEMO_IMAGE)
+        expect(gpage.get_by_text("Enter whole weeks and 0–6 days")).to_be_visible()
+        expect(gpage.get_by_role("button", name="Analyse image")).to_be_disabled()
+        checks.append("GA outside 14-40 weeks rejected in the form (button disabled)")
+        gpage.locator("#ga-weeks").fill("20")
+        gpage.locator("#ga-days").fill("0")
+        gpage.get_by_role("button", name="Analyse image").click()
+        expect(gpage.get_by_test_id("growth-panel")).to_be_visible(timeout=30000)
+        expect(gpage.get_by_test_id("centile-chart").locator("svg path").first).to_be_visible(timeout=15000)
+        centile = gpage.get_by_test_id("metric-centile").inner_text()
+        gpage.screenshot(path=SHOTS / "ui_results_centile.png", full_page=True)
+        gpage.emulate_media(media="print")
+        gpage.screenshot(path=SHOTS / "ui_report_centile_print.png", full_page=True)
+        gpage.emulate_media(media="screen")
+        checks.append(f"GA 20+0 on {GA_DEMO_IMAGE}: centile card ({centile}) and INTERGROWTH-21st chart shown")
+
+        # 11. Swagger docs
         page.goto(f"{API}/docs")
         expect(page.get_by_text("/api/v1/predict")).to_be_visible(timeout=15000)
         page.screenshot(path=SHOTS / "swagger_docs.png", full_page=True)
