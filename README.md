@@ -2,9 +2,10 @@
 
 [![CI](https://github.com/varshitha702/-Multimodal-AI-Fetal-Screening/actions/workflows/ci.yml/badge.svg)](https://github.com/varshitha702/-Multimodal-AI-Fetal-Screening/actions/workflows/ci.yml)
 
-B.Tech Major Project, REVA University. FetalAI segments the fetal head in a 2-D ultrasound image with a
-U-Net, fits an ellipse to it and reports the **head circumference (HC) in millimetres**, through a FastAPI
-backend and a Next.js web app.
+B.Tech Major Project, REVA University. FetalAI first **checks that the ultrasound image is the standard
+trans-thalamic plane** (a calibrated plane classifier), then segments the fetal head with a U-Net, fits an
+ellipse to it and reports the **head circumference (HC) in millimetres**, through a FastAPI backend and a
+Next.js web app.
 
 > **Academic research prototype, not a medical device.** It is not clinically validated and must not be used
 > for diagnosis, reassurance, triage or pregnancy-care decisions.
@@ -23,11 +24,25 @@ backend and a Next.js web app.
 Trained on HC18 (van den Heuvel et al., *PLoS ONE* 2018) with a group-level split so no fetus is in both
 training and test. Details and limitations: [`docs/MODEL_CARD.md`](docs/MODEL_CARD.md).
 
+### Standard-plane quality gate (official FETAL_PLANES_DB test set, 5,271 images, unseen patients)
+
+| Metric | Value |
+|---|---|
+| Plane accuracy / macro-F1 (6 classes) | **94.0 %** / 0.934 |
+| Brain sub-plane accuracy / macro-F1 (TT, TC, TV, other) | 82.7 % / 0.721 |
+| Calibration error (ECE), before → after temperature scaling | 0.035 → **0.014** |
+| Trans-thalamic images accepted / non-brain images rejected | **95.7 %** / **99.8 %** |
+| HC18 images accepted (domain shift, early gestation) | 60.3 % (override available) |
+
 ## Features
 
+* **Standard-plane quality gate** (Feature A): an EfficientNet-B0 with a plane head and a brain sub-plane head,
+  trained on FETAL_PLANES_DB with a patient-level split and temperature-scaled. If the image is not a confirmed
+  trans-thalamic plane, the API withholds HC and says why ("please re-acquire"); an explicit override
+  measures anyway. The UI shows a PASS / WARN badge before the result.
 * **Segmentation + measurement:** U-Net → largest component → ellipse fit → Ramanujan perimeter × pixel spacing.
-* **REST API** (FastAPI): `/api/v1/health`, `/api/v1/model-info`, `/api/v1/predict`; validation with clear
-  400/413/415/422/503 errors; OpenAPI docs at `/docs`.
+* **REST API** (FastAPI): `/api/v1/health`, `/api/v1/model-info`, `/api/v1/predict`, `/api/v1/plane-check`;
+  validation with clear 400/413/415/422/503 errors; OpenAPI docs at `/docs`.
 * **Web app** (Next.js + Tailwind + shadcn/ui): drag-and-drop upload, pixel spacing auto-filled for HC18
   images, original / overlay / mask views, metric cards, quality warnings, printable report, JSON download,
   model page, light/dark, mobile layout.
@@ -35,7 +50,7 @@ training and test. Details and limitations: [`docs/MODEL_CARD.md`](docs/MODEL_CA
   (Papageorghiou et al., *Lancet* 2014), verified against every cell of the official published table, with a
   centile chart. A comparison with a population standard, not a diagnosis.
 * **Research dashboard** (Streamlit) using the same inference code.
-* **Reproducible pipeline:** fixed-seed split, GPU training, evaluation script, 92 automated tests, CI.
+* **Reproducible pipeline:** fixed-seed splits, GPU training, evaluation scripts, 114 automated tests, CI.
 
 ## Architecture
 
@@ -43,6 +58,8 @@ training and test. Details and limitations: [`docs/MODEL_CARD.md`](docs/MODEL_CA
 flowchart LR
     U([User]) --> FE[Next.js frontend :3000]
     FE -->|/api/v1/predict| API[FastAPI backend :8000]
+    API --> PG[ml.planes.PlaneClassifier<br/>plane gate]
+    PG --> PM[(Plane checkpoint)]
     API --> INF[ml.inference.Segmenter]
     DB[Streamlit dashboard] --> INF
     INF --> M[(U-Net checkpoint)]
@@ -69,6 +86,11 @@ python scripts\check_hc18.py
 python -m ml.train
 python -m ml.evaluate
 
+# 3b. Plane gate: download FETAL_PLANES_DB (Zenodo 3904280) into data/raw/FETAL_PLANES_DB, then
+#     (about 17 min training + first-run image caching)
+python -m ml.train_planes --size 320 --batch-size 32
+python -m ml.evaluate_planes
+
 # 4. Backend on http://localhost:8000 (docs at /docs)
 scripts\run_backend.bat
 
@@ -80,7 +102,8 @@ npm run dev
 
 ### Or with Docker (backend on CPU + frontend)
 
-Needs Docker Desktop and the trained checkpoint at `outputs/hc18_unet_best.pth` (mounted read-only):
+Needs Docker Desktop and the trained checkpoints `outputs/hc18_unet_best.pth` and
+`outputs/plane_classifier_best.pth` (mounted read-only):
 
 ```powershell
 docker compose up --build      # web app http://localhost:3000, API docs http://localhost:8000/docs
@@ -89,13 +112,20 @@ docker compose up --build      # web app http://localhost:3000, API docs http://
 Optional research dashboard: `streamlit run dashboard\app.py`. Tests: `python -m pytest` and see
 [`docs/TESTING.md`](docs/TESTING.md).
 
-The trained checkpoint (`outputs/hc18_unet_best.pth`, 31 MB) is not committed; step 3 regenerates it.
+The trained checkpoints (`outputs/hc18_unet_best.pth`, 31 MB; `outputs/plane_classifier_best.pth`) are not
+committed; steps 3 and 3b regenerate them. Without the plane checkpoint the API still runs and reports the plane
+check as unavailable.
 
 ## Screenshots
 
 | | |
 |---|---|
 | Upload | ![](docs/screenshots/ui_upload_ready.png) |
+| Plane check: PASS | ![](docs/screenshots/ui_plane_check_pass.png) |
+| Plane check: WARN (femur image, HC withheld) | ![](docs/screenshots/ui_plane_check_warn.png) |
+| Plane check: overridden | ![](docs/screenshots/ui_plane_check_override.png) |
+| Plane classifier confusion matrices | ![](docs/screenshots/plane_confusion.png) |
+| Calibration before / after | ![](docs/screenshots/plane_reliability.png) |
 | Results (dark) | ![](docs/screenshots/ui_results_dark.png) |
 | GA centile | ![](docs/screenshots/ui_results_centile.png) |
 | Printable report | ![](docs/screenshots/ui_report_print.png) |
@@ -107,7 +137,7 @@ The trained checkpoint (`outputs/hc18_unet_best.pth`, 31 MB) is not committed; s
 ## Repository layout
 
 ```text
-ml/          data pipeline, U-Net, training, evaluation, geometry, inference (Python package)
+ml/          data pipeline, U-Net, plane classifier, training, evaluation, geometry, inference (Python package)
 backend/     FastAPI service (api / core / schemas / services)
 frontend/    Next.js + TypeScript + Tailwind web app
 dashboard/   Streamlit research dashboard (fallback UI)
