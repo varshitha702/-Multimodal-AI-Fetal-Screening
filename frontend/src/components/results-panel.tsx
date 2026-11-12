@@ -55,12 +55,16 @@ export function ResultsPanel({ result, originalUrl, fileName, onOverride, overri
       <Card>
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0">
           <CardTitle className="flex items-center gap-2 text-lg">
-            {result.head_detected ? (
+            {result.head_detected && !result.measurement_withheld ? (
               <CheckCircle2 className="size-5 text-emerald-500" />
             ) : (
               <AlertTriangle className="size-5 text-amber-500" />
             )}
-            {result.head_detected ? "Fetal head segmented" : "No fetal head detected"}
+            {result.measurement_withheld
+              ? "Segmentation preview (measurement withheld)"
+              : result.head_detected
+                ? "Fetal head segmented"
+                : "No fetal head detected"}
           </CardTitle>
           <div className="flex flex-wrap gap-2 print:hidden">
             <Button variant="outline" size="sm" onClick={() => window.print()}>

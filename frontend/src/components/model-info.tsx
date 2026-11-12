@@ -201,7 +201,9 @@ export function ModelInfoView() {
         <AlertDescription>
           The segmentation model was trained and tested on one public dataset only, with no external validation.
           The plane gate was trained on a different public dataset (FETAL_PLANES_DB, two Barcelona hospitals), so it
-          can be less reliable on images from other machines. Small, early-gestation heads are the weakest case. The
+          can be less reliable on images from other machines; it accepts only 60% of HC18 images and about a third of
+          early-gestation ones (HC under 100 mm), so use the override when needed. Small, early-gestation heads are
+          also the weakest case for segmentation. The
           segmentation quality indicators are heuristics, not calibrated uncertainty. {info.disclaimer}
         </AlertDescription>
       </Alert>
