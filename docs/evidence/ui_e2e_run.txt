@@ -11,7 +11,7 @@ E09 PASS  model page shows held-out test metrics
 E10 PASS  mobile (390 px): results render, no horizontal scroll
 E11 PASS  GA outside 14-40 weeks rejected in the form (button disabled)
 E12 PASS  GA 20+0 on 544_HC.png: plane check PASS, centile card (42nd) and chart shown
-E13 PASS  544_HC.png: HC shown as HC ± TTA SD (170.9 ± 1.6mm), reliability OK
+E13 PASS  544_HC.png: HC shown as HC Â± TTA SD (170.9 Â± 1.6mm), reliability OK
 E14 PASS  overlay toggle switches to the TTA uncertainty map
 E15 PASS  794_HC.png: 'Low: re-scan' reliability and quality warning shown
 E16 PASS  femur image Patient00647_Plane5_1_of_1.png: plane check WARN ('femur'), HC withheld
