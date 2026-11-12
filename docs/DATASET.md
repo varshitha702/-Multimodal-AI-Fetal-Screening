@@ -85,7 +85,7 @@ maternal fetal ultrasound planes", *Scientific Reports* 10, 10200 (2020). Data: 
 
 ## Contents (verified after download)
 
-* 12,400 PNG images from **1,792 patients**, routine 2nd/3rd-trimester screening at two Barcelona hospitals.
+* 12,400 PNG images from **1,792 patients**, 18–40 weeks of gestation, routine screening at two Barcelona hospitals.
   Machines: Voluson E6 (5,862), Aloka (5,114), Voluson S10 (1,082), other (342).
 * `FETAL_PLANES_DB_data.csv` (`;`-separated, last column name `Train ` has a trailing space):
   `Plane` (6 classes), `Brain_plane` (Trans-thalamic / Trans-cerebellum / Trans-ventricular / Other /
@@ -120,6 +120,6 @@ shift ±6 %, contrast/brightness/gamma jitter.
 
 ## Known domain gap with HC18
 
-FETAL_PLANES_DB comes from routine second- and third-trimester screening in Spain. HC18 (Netherlands) contains
+FETAL_PLANES_DB images span 18–40 weeks of gestation (two BCNatal sites, Hospital Clínic and Hospital Sant Joan de Déu, Barcelona; paper, Methods). HC18 (Netherlands) contains
 many **early-gestation** images (reference HC < 100 mm, about ≤ 16 weeks), and every HC18 image has black
 anonymisation boxes. Both affect how often the gate accepts HC18 images (see `docs/MODEL_CARD.md`).
