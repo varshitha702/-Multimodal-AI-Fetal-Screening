@@ -15,11 +15,20 @@
 | Docker Compose (backend CPU + frontend), verified end to end | Done | `docker-compose.yml` |
 | HC-for-gestational-age centile (INTERGROWTH-21st), verified against the published table | Done | `ml/intergrowth.py`, `tests/test_intergrowth.py` |
 
+## Phase-1 extension (brief 2, 13 Nov 2026 feature freeze)
+
+| Item | Status | Evidence |
+|---|---|---|
+| **A. Standard-plane quality gate** (FETAL_PLANES_DB, two-head EfficientNet-B0, temperature scaling, gate in `/predict`, UI badge, override) | Done | `docs/MODEL_CARD.md` (plane acc 94.0 %, ECE 0.014, TT accepted 95.7 %, HC18 accepted 60.3 %), ADR-0006 |
+| B. Measurement uncertainty (test-time augmentation) | In progress | |
+| C. CTG branch + rule-based screening summary | Planned | |
+
 
 ## Phase 2 (remaining 30 %)
 
-1. **Standard-plane quality gate.** Train a classifier on FETAL_PLANES_DB to check that an image is a
-   trans-thalamic head plane before measuring; reject or warn otherwise.
+1. **Plane gate on local data.** The gate (done, see above) accepts only 60 % of HC18 images because of
+   domain shift and early gestation; fine-tune and re-validate it on paired local hospital images, and add
+   within-plane quality scoring (landmarks, symmetry).
 2. **CTG (cardiotocography) branch** with confidence-aware decision-level fusion with the ultrasound branch
    (the "multimodal" part of the project title).
 3. **Uncertainty and calibration.** Test-time augmentation and/or MC dropout; calibrate the confidence shown
