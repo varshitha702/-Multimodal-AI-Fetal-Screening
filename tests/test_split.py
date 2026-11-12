@@ -2,7 +2,7 @@
 import pandas as pd
 import pytest
 
-from ml.split import CSV_PATH, HC_COL, SPLIT_PATH, group_id, load_split, make_split
+from ml.split import CSV_PATH, HC_COL, group_id, load_split, make_split
 
 
 def test_group_id_parses_hc18_names():

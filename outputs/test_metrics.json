@@ -1,0 +1,40 @@
+{
+  "split": "held-out test (group-level, seed 42)",
+  "test_images": 151,
+  "checkpoint_epoch": 50,
+  "checkpoint_val_dice": 0.976,
+  "resolution": "original image resolution",
+  "dice": {
+    "mean": 0.973,
+    "sd": 0.028,
+    "median": 0.979,
+    "min": 0.731,
+    "max": 0.992
+  },
+  "iou": {
+    "mean": 0.948,
+    "sd": 0.046,
+    "median": 0.96,
+    "min": 0.576,
+    "max": 0.984
+  },
+  "ellipse_fit_failures": 0,
+  "hc_error_mm": {
+    "mean": -0.098,
+    "sd": 2.953,
+    "median": -0.329,
+    "min": -7.669,
+    "max": 11.581
+  },
+  "hc_mae_mm": 2.183,
+  "hc_abs_error_percent_mean": 1.48,
+  "hc_abs_error_mm_percentiles": {
+    "p50": 1.796,
+    "p90": 4.656,
+    "p95": 5.926
+  },
+  "bland_altman_limits_of_agreement_mm": [
+    -5.886,
+    5.69
+  ]
+}
