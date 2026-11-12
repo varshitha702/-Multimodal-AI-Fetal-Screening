@@ -18,3 +18,13 @@ outputs/*.tmp
 .idea/
 .DS_Store
 Thumbs.db
+
+# frontend
+node_modules/
+frontend/.next/
+frontend/out/
+
+# tooling
+.pytest_cache/
+.ruff_cache/
+*.egg-info/

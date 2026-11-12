@@ -1,0 +1,17 @@
+[project]
+name = "fetalai"
+version = "0.1.0"
+description = "FetalAI: HC18 fetal-head segmentation and head-circumference measurement (academic prototype, not a medical device)"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+extend-exclude = ["legacy", "frontend", "dashboard"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
