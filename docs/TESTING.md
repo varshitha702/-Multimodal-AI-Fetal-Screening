@@ -19,7 +19,7 @@ Static checks: `ruff check .` (Python) clean; `npm run lint`, `npm run typecheck
 
 Screenshot of the pytest run: `docs/screenshots/test_run_pytest.png`.
 
-**GitHub Actions CI**: Python job **73 passed, 4 skipped** (51 + 4 skipped before step 5 in run
+**GitHub Actions CI** (run 43239985081): Python job **73 passed, 4 skipped** (51 + 4 skipped before step 5, run
 43235961106), ruff clean; frontend job lint + build + smoke passed. The dataset and trained checkpoint are not in the repository, so the four tests
 that need them (U05, U14, U27, U32, marked *data* below) are skipped in CI and run locally. The API tests never
 need them: they use a randomly initialised checkpoint created in a temp folder.
