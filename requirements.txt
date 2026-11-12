@@ -1,0 +1,9 @@
+streamlit>=1.36
+torch>=2.2
+torchvision>=0.17
+numpy>=1.26
+pandas>=2.1
+Pillow>=10.0
+opencv-python-headless>=4.9
+reportlab>=4.1
+scikit-learn>=1.4

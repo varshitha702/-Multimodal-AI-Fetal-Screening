@@ -1,0 +1,28 @@
+
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap');
+:root { --navy:#14324a; --blue:#2377a8; --teal:#159b91; --ink:#203244; --muted:#6b7d8d; --line:#e4ebf1; }
+html, body, [class*="css"] { font-family:'DM Sans',sans-serif; color:var(--ink); }
+.stApp { background:linear-gradient(180deg,#f8fbfd 0%,#f5f8fb 100%); }
+h1,h2,h3 { font-family:'Manrope',sans-serif !important; color:var(--navy); letter-spacing:-.035em; }
+h1 { font-weight:800 !important; }
+[data-testid="stSidebar"] { background:#102b42; border-right:1px solid #24445b; }
+[data-testid="stSidebar"] * { color:#edf5fa !important; }
+[data-testid="stSidebar"] [data-testid="stRadio"] label { padding:8px 10px; border-radius:9px; }
+.brand { display:flex; align-items:center; gap:12px; padding:10px 0 18px; color:white; }
+.brand b { display:block; font:800 23px Manrope,sans-serif; letter-spacing:-1px; }
+.brand small { display:block; color:#a9c0d0; font-size:9px; letter-spacing:1.4px; margin-top:2px; }
+.brand-mark { width:40px;height:40px;border-radius:12px;background:#1a9d99;display:grid;place-items:center;font-size:24px;font-weight:700; }
+.eyebrow { color:#168f91; font-size:11px; font-weight:700; letter-spacing:2px; margin:8px 0; }
+.stAlert { border-radius:12px; }
+div[data-testid="stMetric"] { background:white; border:1px solid var(--line); border-radius:14px; padding:17px 18px; box-shadow:0 3px 14px rgba(26,57,80,.035); }
+div[data-testid="stMetricLabel"] { color:var(--muted); }
+div[data-testid="stMetricValue"] { color:var(--navy); font-family:Manrope,sans-serif; }
+.feature-card { background:white; border:1px solid var(--line); border-radius:16px; padding:20px; min-height:160px; box-shadow:0 5px 18px rgba(25,58,82,.04); }
+.feature-card h3 { font-size:17px; margin:10px 0 6px; }
+.feature-card p { color:var(--muted); font-size:13px; line-height:1.6; }
+.feature-icon { width:34px;height:34px;border-radius:10px;background:#e6f5f4;color:#148f89;display:grid;place-items:center;font-weight:800; }
+.stButton > button, .stDownloadButton > button { border-radius:10px; font-weight:700; min-height:42px; }
+.stButton > button[kind="primary"] { background:#167f91; border-color:#167f91; }
+.stFileUploader, [data-testid="stForm"] { background:white; border:1px solid var(--line); border-radius:14px; padding:12px; }
+.footer { text-align:center; color:#8292a0; font-size:11px; border-top:1px solid var(--line); padding:22px 0 8px; margin-top:38px; }
+code { color:#176c80 !important; }
