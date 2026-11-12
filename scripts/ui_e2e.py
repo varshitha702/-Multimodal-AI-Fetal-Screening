@@ -22,6 +22,7 @@ TRAIN_DIR = ROOT / "data" / "raw" / "HC18" / "training_set"
 DEMO_IMAGE = "006_HC.png"  # held-out TEST split, reference HC 67.84 mm; early gestation -> plane gate warns
 GA_DEMO_IMAGE = "544_HC.png"  # held-out TEST split, reference HC 171.4 mm (within the 14-40 week range)
 PLANES_DIR = ROOT / "data" / "raw" / "FETAL_PLANES_DB" / "Images"
+LOW_RELIABILITY_IMAGE = "794_HC.png"  # held-out TEST split; passes the plane gate, TTA flags it (HC SD 14 mm)
 
 
 def wrong_plane_image() -> Path:
@@ -150,11 +151,32 @@ def main() -> int:
         centile = gpage.get_by_test_id("metric-centile").inner_text()
         expect(gpage.get_by_test_id("plane-check")).to_have_attribute("data-status", "pass")
         gpage.get_by_test_id("plane-check").screenshot(path=SHOTS / "ui_plane_check_pass.png")
+        hc_pm = gpage.get_by_test_id("metric-head-circumference").inner_text()
+        assert "±" in hc_pm, hc_pm
+        expect(gpage.get_by_test_id("metric-reliability")).to_have_text("OK")
         gpage.screenshot(path=SHOTS / "ui_results_centile.png", full_page=True)
         gpage.emulate_media(media="print")
         gpage.screenshot(path=SHOTS / "ui_report_centile_print.png", full_page=True)
         gpage.emulate_media(media="screen")
         checks.append(f"GA 20+0 on {GA_DEMO_IMAGE}: plane check PASS, centile card ({centile}) and chart shown")
+        checks.append(f"{GA_DEMO_IMAGE}: HC shown as HC ± TTA SD ({hc_pm.strip()}), reliability OK")
+        gpage.get_by_role("button", name="Uncertainty map").click()
+        expect(gpage.get_by_alt_text(re.compile("Uncertainty map"))).to_be_visible()
+        gpage.screenshot(path=SHOTS / "ui_uncertainty_map.png", full_page=True)
+        checks.append("overlay toggle switches to the TTA uncertainty map")
+
+        # 10b. Low-reliability case from the held-out test split
+        upage = ctx.new_page()
+        upage.on("pageerror", lambda e: errors.append(str(e)))
+        upage.goto(WEB)
+        upage.get_by_test_id("file-input").set_input_files(TRAIN_DIR / LOW_RELIABILITY_IMAGE)
+        expect(upage.get_by_text("HC18 auto-filled")).to_be_visible()
+        upage.get_by_role("button", name="Analyse image").click()
+        expect(upage.get_by_test_id("metric-reliability")).to_have_text("Low: re-scan", timeout=30000)
+        expect(upage.get_by_test_id("results").get_by_text("Low reliability, re-scan recommended")).to_be_visible()
+        upage.get_by_role("button", name="Uncertainty map").click()
+        upage.screenshot(path=SHOTS / "ui_low_reliability.png", full_page=True)
+        checks.append(f"{LOW_RELIABILITY_IMAGE}: 'Low: re-scan' reliability and quality warning shown")
 
         # 11. Plane gate on a different plane: a FETAL_PLANES_DB test femur image -> WARN, HC withheld
         femur = wrong_plane_image()
