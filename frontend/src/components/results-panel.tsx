@@ -2,6 +2,7 @@
 
 import { AlertTriangle, CheckCircle2, Download, FileJson, Printer } from "lucide-react";
 
+import { GrowthPanel } from "@/components/growth-panel";
 import { MetricCard } from "@/components/metric-card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -110,6 +111,10 @@ export function ResultsPanel({ result, originalUrl, fileName }: Props) {
           hint={`${pct(result.quality.uncertain_fraction)} uncertain boundary · ${result.inference_ms.toFixed(0)} ms`}
         />
       </div>
+
+      {result.growth && result.head_circumference_mm !== null && (
+        <GrowthPanel growth={result.growth} hcMm={result.head_circumference_mm} />
+      )}
 
       {flags.length > 0 ? (
         <Alert variant="warning">

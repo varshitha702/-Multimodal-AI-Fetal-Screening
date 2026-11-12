@@ -20,12 +20,16 @@ type Status = "idle" | "loading" | "done" | "error";
 
 const PX_MIN = 0.001;
 const PX_MAX = 1;
+const GA_MIN = 14;
+const GA_MAX = 40;
 
 export function Analyzer() {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [pixelSize, setPixelSize] = useState("");
   const [match, setMatch] = useState<PixelSizeMatch | null>(null);
+  const [gaWeeks, setGaWeeks] = useState("");
+  const [gaDays, setGaDays] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Prediction | null>(null);
@@ -56,15 +60,24 @@ export function Analyzer() {
   const pxValue = pixelSize.trim() === "" ? null : Number(pixelSize);
   const pxInvalid = pxValue !== null && (!Number.isFinite(pxValue) || pxValue < PX_MIN || pxValue > PX_MAX);
 
+  // Gestational age as weeks + days -> exact weeks (INTERGROWTH-21st standard covers 14+0 to 40+0)
+  const gaGiven = gaWeeks.trim() !== "" || gaDays.trim() !== "";
+  const gaW = Number(gaWeeks.trim() || "NaN");
+  const gaD = gaDays.trim() === "" ? 0 : Number(gaDays);
+  const gaValue = gaGiven ? gaW + gaD / 7 : null;
+  const gaInvalid =
+    gaGiven &&
+    (!Number.isInteger(gaW) || !Number.isInteger(gaD) || gaD < 0 || gaD > 6 || gaValue! < GA_MIN || gaValue! > GA_MAX);
+
   async function analyze() {
-    if (!file || pxInvalid) return;
+    if (!file || pxInvalid || gaInvalid) return;
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
     setStatus("loading");
     setError(null);
     try {
-      const r = await predict(file, pxValue, controller.signal);
+      const r = await predict(file, pxValue, gaInvalid ? null : gaValue, controller.signal);
       setResult(r);
       setStatus("done");
     } catch (e) {
@@ -124,7 +137,43 @@ export function Analyzer() {
               </p>
             </div>
 
-            <Button className="w-full" size="lg" onClick={analyze} disabled={!file || pxInvalid || status === "loading"}>
+            <div className="space-y-2">
+              <Label htmlFor="ga-weeks">Gestational age (optional)</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="ga-weeks"
+                  inputMode="numeric"
+                  placeholder="weeks"
+                  value={gaWeeks}
+                  onChange={(e) => setGaWeeks(e.target.value)}
+                  aria-invalid={gaInvalid}
+                  className={gaInvalid ? "border-destructive" : undefined}
+                />
+                <span className="text-muted-foreground">+</span>
+                <Input
+                  id="ga-days"
+                  aria-label="Gestational age days"
+                  inputMode="numeric"
+                  placeholder="days"
+                  value={gaDays}
+                  onChange={(e) => setGaDays(e.target.value)}
+                  aria-invalid={gaInvalid}
+                  className={gaInvalid ? "border-destructive" : undefined}
+                />
+              </div>
+              <p className={gaInvalid ? "text-xs text-destructive" : "text-xs text-muted-foreground"}>
+                {gaInvalid
+                  ? `Enter whole weeks and 0–6 days, between ${GA_MIN}+0 and ${GA_MAX}+0.`
+                  : "From the dating scan. Compares HC with the INTERGROWTH-21st standard (14–40 weeks)."}
+              </p>
+            </div>
+
+            <Button
+              className="w-full"
+              size="lg"
+              onClick={analyze}
+              disabled={!file || pxInvalid || gaInvalid || status === "loading"}
+            >
               {status === "loading" ? (
                 <>
                   <Loader2 className="size-4 animate-spin" /> Analysing…

@@ -1,4 +1,4 @@
-import { dataUrl, type Prediction } from "@/lib/api";
+import { dataUrl, formatGa, type Prediction } from "@/lib/api";
 
 interface Props {
   result: Prediction;
@@ -19,6 +19,15 @@ export function PrintReport({ result, originalUrl, fileName }: Props) {
       e?.semi_major_mm ? `${(2 * e.semi_major_mm).toFixed(1)} × ${(2 * e.semi_minor_mm!).toFixed(1)} mm` : "—",
     ],
     ["Head area", result.head_area_mm2 !== null ? `${(result.head_area_mm2 / 100).toFixed(2)} cm²` : "—"],
+    ...(result.growth
+      ? ([
+          ["Gestational age", `${formatGa(result.growth.gestational_age_weeks)} weeks`],
+          [
+            "HC centile (INTERGROWTH-21st)",
+            `${result.growth.centile.toFixed(1)} (z ${result.growth.z_score.toFixed(2)}); median ${result.growth.median_mm.toFixed(1)} mm, 3rd–97th ${result.growth.p3_mm.toFixed(1)}–${result.growth.p97_mm.toFixed(1)} mm`,
+          ],
+        ] as [string, string][])
+      : []),
     ["Model confidence", `${(result.quality.mean_confidence * 100).toFixed(1)}%`],
     ["Model version", result.model_version],
   ];
@@ -61,6 +70,7 @@ export function PrintReport({ result, originalUrl, fileName }: Props) {
       <p className="text-xs">
         Method: U-Net segmentation, ellipse fit, perimeter by Ramanujan&apos;s approximation × pixel spacing. Trained on
         the HC18 dataset (van den Heuvel et al., PLoS ONE 2018).
+        {result.growth && " Centile: INTERGROWTH-21st fetal growth standard (Papageorghiou et al., Lancet 2014;384:869-79); a comparison with a population standard, not a diagnosis."}
       </p>
     </article>
   );

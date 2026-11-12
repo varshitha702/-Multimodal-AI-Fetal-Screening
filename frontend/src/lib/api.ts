@@ -30,6 +30,32 @@ export interface Quality {
   flags: string[];
 }
 
+export interface Growth {
+  gestational_age_weeks: number;
+  z_score: number;
+  centile: number;
+  median_mm: number;
+  p3_mm: number;
+  p97_mm: number;
+  within_p3_p97: boolean;
+  reference: string;
+}
+
+export interface CentilePoint {
+  ga_weeks: number;
+  p3: number;
+  p10: number;
+  p50: number;
+  p90: number;
+  p97: number;
+}
+
+export interface CentileCurves {
+  reference: string;
+  unit: string;
+  points: CentilePoint[];
+}
+
 export interface Prediction {
   image_width: number;
   image_height: number;
@@ -40,6 +66,7 @@ export interface Prediction {
   head_area_px: number;
   ellipse: Ellipse | null;
   quality: Quality;
+  growth: Growth | null;
   mask_png_base64: string;
   overlay_png_base64: string;
   inference_ms: number;
@@ -101,11 +128,21 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const getHealth = () => request<Health>("/api/v1/health");
 export const getModelInfo = () => request<ModelInfo>("/api/v1/model-info");
 
-export function predict(file: File, pixelSizeMm: number | null, signal?: AbortSignal) {
+export const getCentileCurves = () => request<CentileCurves>("/api/v1/reference/hc-centiles");
+
+export function predict(file: File, pixelSizeMm: number | null, gaWeeks: number | null, signal?: AbortSignal) {
   const form = new FormData();
   form.append("file", file);
   if (pixelSizeMm !== null) form.append("pixel_size_mm", String(pixelSizeMm));
+  if (gaWeeks !== null) form.append("gestational_age_weeks", String(gaWeeks));
   return request<Prediction>("/api/v1/predict", { method: "POST", body: form, signal });
+}
+
+/** "22+3" style label for exact weeks. */
+export function formatGa(weeks: number) {
+  const w = Math.floor(weeks + 1e-9);
+  const d = Math.round((weeks - w) * 7);
+  return d === 7 ? `${w + 1}+0` : `${w}+${d}`;
 }
 
 export const dataUrl = (b64: string) => `data:image/png;base64,${b64}`;
