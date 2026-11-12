@@ -1,0 +1,51 @@
+{
+  "epoch": 11,
+  "architecture": "EfficientNet-B0 (ImageNet) + plane head (6) + brain sub-plane head (4)",
+  "input_size": 224,
+  "planes": [
+    "Fetal brain",
+    "Fetal abdomen",
+    "Fetal femur",
+    "Fetal thorax",
+    "Maternal cervix",
+    "Other"
+  ],
+  "subplanes": [
+    "Trans-thalamic",
+    "Trans-cerebellum",
+    "Trans-ventricular",
+    "Other"
+  ],
+  "temperature_plane": 1.2337167263031006,
+  "temperature_subplane": 1.738674521446228,
+  "tt_threshold": 0.16252045333385468,
+  "val_plane_macro_f1": 0.9521166666666666,
+  "val_subplane_macro_f1": 0.767975,
+  "threshold_rule": "largest t with validation trans-thalamic recall >= 0.95",
+  "split_counts": [
+    {
+      "split": "test",
+      "images": 5271,
+      "patients": 896
+    },
+    {
+      "split": "train",
+      "images": 6091,
+      "patients": 762
+    },
+    {
+      "split": "val",
+      "images": 1038,
+      "patients": 134
+    }
+  ],
+  "epochs_run": 17,
+  "minutes": 8.0,
+  "args": {
+    "epochs": 25,
+    "batch_size": 64,
+    "lr": 0.0003,
+    "patience": 6
+  },
+  "device": "NVIDIA GeForce RTX 4050 Laptop GPU"
+}
