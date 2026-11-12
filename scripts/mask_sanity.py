@@ -103,7 +103,7 @@ def main() -> None:
     rng = np.random.default_rng(0)
     pick = rng.choice(len(ann_paths), 12, replace=False)
     fig, axes = plt.subplots(3, 4, figsize=(14, 8))
-    for ax, i in zip(axes.flat, pick):
+    for ax, i in zip(axes.flat, pick, strict=True):
         ap = ann_paths[i]
         img = np.asarray(Image.open(str(ap).replace("_Annotation", "")).convert("L"))
         filled, _ = fill_annotation(load_annotation(ap))
