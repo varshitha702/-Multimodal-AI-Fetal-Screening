@@ -31,8 +31,11 @@ training and test. Details and limitations: [`docs/MODEL_CARD.md`](docs/MODEL_CA
 * **Web app** (Next.js + Tailwind + shadcn/ui): drag-and-drop upload, pixel spacing auto-filled for HC18
   images, original / overlay / mask views, metric cards, quality warnings, printable report, JSON download,
   model page, light/dark, mobile layout.
+* **HC-for-gestational-age centile** (optional GA input) from the INTERGROWTH-21st fetal standard
+  (Papageorghiou et al., *Lancet* 2014), verified against every cell of the official published table, with a
+  centile chart. A comparison with a population standard, not a diagnosis.
 * **Research dashboard** (Streamlit) using the same inference code.
-* **Reproducible pipeline:** fixed-seed split, GPU training, evaluation script, 68 automated tests, CI.
+* **Reproducible pipeline:** fixed-seed split, GPU training, evaluation script, 92 automated tests, CI.
 
 ## Architecture
 
@@ -86,6 +89,7 @@ The trained checkpoint (`outputs/hc18_unet_best.pth`, 31 MB) is not committed; s
 |---|---|
 | Upload | ![](docs/screenshots/ui_upload_ready.png) |
 | Results (dark) | ![](docs/screenshots/ui_results_dark.png) |
+| GA centile | ![](docs/screenshots/ui_results_centile.png) |
 | Printable report | ![](docs/screenshots/ui_report_print.png) |
 | Model page | ![](docs/screenshots/ui_model_page.png) |
 | API docs | ![](docs/screenshots/swagger_docs.png) |

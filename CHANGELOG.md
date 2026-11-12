@@ -23,6 +23,10 @@ All notable changes are listed here. Format: [Keep a Changelog](https://keepacha
 - Documentation: architecture with Mermaid diagrams, API, dataset card, model card, testing, roadmap, ADRs,
   handoff.
 
+- Gestational-age input and HC-for-GA centile from the INTERGROWTH-21st fetal standard (Papageorghiou et al.,
+  Lancet 2014), verified against all 189 cells of the official table; centile chart and report section;
+  `/api/v1/reference/hc-centiles` (#10).
+
 ### Changed
 - Repository reorganised into `ml/`, `backend/`, `frontend/`, `dashboard/`, `scripts/`, `tests/`, `docs/` (#2).
 

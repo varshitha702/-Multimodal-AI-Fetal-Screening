@@ -52,7 +52,10 @@ Short records are in [`adr/`](adr/).
    `PIL.Image.verify` (400), actual format (415), pixel limits (400). One error JSON shape for every error.
 7. **Pixel spacing is an explicit input.** The model cannot know mm/px; HC is reported only when spacing is
    given. For HC18 demo images the frontend fills it from a SHA-256 lookup table.
-8. **Quality indicators are heuristics** (confidence, uncertain-boundary fraction, border contact,
+8. **Clinical context only from a verified standard** (ADR-0005). The optional gestational age is used to place
+   the measured HC on the INTERGROWTH-21st fetal standard; equations from the source paper, verified against
+   all 189 cells of the official table.
+9. **Quality indicators are heuristics** (confidence, uncertain-boundary fraction, border contact,
    ellipse-fit ratio), shown as warnings, not as calibrated uncertainty.
 
 ## 3. Flowchart: analysing one image
@@ -77,7 +80,10 @@ flowchart TD
     L --> M{Pixel spacing given?}
     M -- yes --> N[HC mm = perimeter x spacing, area mm2]
     M -- no --> O[HC = null, flag]
-    N --> P[Quality flags, overlay + mask PNG]
+    N --> GA{Gestational age given?}
+    GA -- yes --> CT[INTERGROWTH-21st z-score and centile]
+    GA -- no --> P
+    CT --> P[Quality flags, overlay + mask PNG]
     O --> P
     K --> P
     P --> Q([200 JSON response])
@@ -251,7 +257,7 @@ flowchart LR
 ## 9. Repository layout
 
 ```text
-ml/         masks, metrics, dataset, split, model, train, evaluate, geometry, inference
+ml/         masks, metrics, dataset, split, model, train, evaluate, geometry, inference, intergrowth
 backend/    FastAPI app: api/ (routes, deps), core/ (config, errors, logging), schemas/, services/
 frontend/   Next.js app: src/app (pages), src/components (+ ui/), src/lib (API client, pixel-size lookup)
 dashboard/  Streamlit research dashboard (uses ml.inference)
