@@ -11,8 +11,15 @@ import cv2
 import numpy as np
 
 from backend.app.core.config import REPO_ROOT, Settings
-from backend.app.schemas.prediction import EllipseParams, ModelInfo, PredictionResponse, Quality
+from backend.app.schemas.prediction import (
+    EllipseParams,
+    GrowthAssessment,
+    ModelInfo,
+    PredictionResponse,
+    Quality,
+)
 from backend.app.services.image_service import png_base64
+from ml import intergrowth
 from ml.inference import Prediction, Segmenter
 
 log = logging.getLogger("fetalai.model")
@@ -67,7 +74,8 @@ class ModelService:
                          "trans-thalamic plane images, for research and teaching only.",
         )
 
-    def predict(self, gray: np.ndarray, pixel_size_mm: float | None) -> PredictionResponse:
+    def predict(self, gray: np.ndarray, pixel_size_mm: float | None,
+                gestational_age_weeks: float | None = None) -> PredictionResponse:
         t0 = time.perf_counter()
         pred = self.segmenter.predict(gray, pixel_size_mm)
         elapsed_ms = (time.perf_counter() - t0) * 1000
@@ -90,7 +98,8 @@ class ModelService:
             head_area_mm2=round(area_px * pixel_size_mm ** 2, 1) if (pixel_size_mm and area_px) else None,
             head_area_px=area_px,
             ellipse=ellipse,
-            quality=self._quality(pred, pixel_size_mm),
+            quality=self._quality(pred, pixel_size_mm, gestational_age_weeks),
+            growth=self._growth(pred.hc_mm, gestational_age_weeks),
             mask_png_base64=png_base64((pred.mask * 255).astype(np.uint8)),
             overlay_png_base64=png_base64(self._overlay(gray, pred)),
             inference_ms=round(elapsed_ms, 1),
@@ -101,7 +110,19 @@ class ModelService:
         return response
 
     @staticmethod
-    def _quality(pred: Prediction, pixel_size_mm: float | None) -> Quality:
+    def _growth(hc_mm: float | None, ga_weeks: float | None) -> GrowthAssessment | None:
+        """Compare HC with the INTERGROWTH-21st standard (needs both HC and gestational age)."""
+        if hc_mm is None or ga_weeks is None:
+            return None
+        a = intergrowth.assess_hc(hc_mm, ga_weeks)
+        return GrowthAssessment(
+            gestational_age_weeks=round(ga_weeks, 3), z_score=round(a.z_score, 2), centile=round(a.centile, 1),
+            median_mm=round(a.median_mm, 1), p3_mm=round(a.p3_mm, 1), p97_mm=round(a.p97_mm, 1),
+            within_p3_p97=a.within_p3_p97, reference=intergrowth.REFERENCE,
+        )
+
+    @staticmethod
+    def _quality(pred: Prediction, pixel_size_mm: float | None, ga_weeks: float | None = None) -> Quality:
         mask = pred.mask
         h, w = mask.shape
         area = int(mask.sum())
@@ -126,6 +147,8 @@ class ModelService:
                 flags.append("Segmented shape is not elliptical; HC may be inaccurate.")
         if pixel_size_mm is None:
             flags.append("No pixel spacing given; HC is reported only when pixel size (mm) is provided.")
+            if ga_weeks is not None:
+                flags.append("Gestational age was given, but the centile needs HC in mm (pixel spacing).")
         return Quality(mean_confidence=round(pred.mean_confidence, 4),
                        uncertain_fraction=round(pred.uncertain_fraction, 4),
                        mask_area_fraction=round(area / (h * w), 4), touches_border=touches,

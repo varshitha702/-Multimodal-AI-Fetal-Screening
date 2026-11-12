@@ -51,6 +51,34 @@ class Quality(BaseModel):
     flags: list[str] = Field(description="Human-readable warnings; empty when nothing looks unusual")
 
 
+class GrowthAssessment(BaseModel):
+    """Measured HC compared with the INTERGROWTH-21st fetal standard (not a diagnosis)."""
+
+    gestational_age_weeks: float
+    z_score: float
+    centile: float = Field(description="0-100, from the standard normal CDF of the z-score")
+    median_mm: float = Field(description="Standard's 50th centile HC at this gestational age")
+    p3_mm: float
+    p97_mm: float
+    within_p3_p97: bool
+    reference: str
+
+
+class CentilePoint(BaseModel):
+    ga_weeks: float
+    p3: float
+    p10: float
+    p50: float
+    p90: float
+    p97: float
+
+
+class CentileCurves(BaseModel):
+    reference: str
+    unit: str = "mm"
+    points: list[CentilePoint]
+
+
 class PredictionResponse(BaseModel):
     image_width: int
     image_height: int
@@ -61,6 +89,8 @@ class PredictionResponse(BaseModel):
     head_area_px: int
     ellipse: EllipseParams | None
     quality: Quality
+    growth: GrowthAssessment | None = Field(
+        default=None, description="Only when gestational_age_weeks was given and HC could be measured")
     mask_png_base64: str = Field(description="Binary mask, PNG, original resolution, base64")
     overlay_png_base64: str = Field(description="Image with mask and fitted ellipse drawn, PNG, base64")
     inference_ms: float
