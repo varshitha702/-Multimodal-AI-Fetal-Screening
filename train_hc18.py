@@ -15,6 +15,8 @@ from PIL import Image
 from torch import nn
 from torch.utils.data import DataLoader, Dataset, Subset
 
+from ml.masks import annotation_to_mask
+from ml.metrics import dice_per_sample
 from model import UNet
 
 
@@ -25,7 +27,7 @@ from model import UNet
 ROOT = Path(__file__).resolve().parent
 
 DATA_ROOT = ROOT / "data" / "raw" / "HC18"
-IMAGE_DIR = DATA_ROOT / "training_set" / "training_set"
+IMAGE_DIR = DATA_ROOT / "training_set"
 CSV_PATH = DATA_ROOT / "training_set_pixel_size_and_HC.csv"
 
 OUTPUT_DIR = ROOT / "outputs"
@@ -94,7 +96,7 @@ class HC18Dataset(Dataset):
 
         required_columns = {
             "filename",
-            "pixel size",
+            "pixel size(mm)",
             "head circumference (mm)",
         }
 
@@ -159,54 +161,9 @@ class HC18Dataset(Dataset):
             dtype=np.float32
         ) / 255.0
 
-        # Load annotation mask
-        with Image.open(mask_path) as mask_file:
-
-            mask_image = mask_file.convert("L")
-
-            mask_image = mask_image.resize(
-                (IMAGE_SIZE, IMAGE_SIZE),
-                Image.Resampling.NEAREST
-            )
-
-        mask_array = np.asarray(
-            mask_image,
-            dtype=np.uint8
-        )
-
-        # Convert mask to binary
-        _, mask_array = cv2.threshold(
-            mask_array,
-            0,
-            255,
-            cv2.THRESH_BINARY + cv2.THRESH_OTSU
-        )
-
-        # Find contours
-        contours, _ = cv2.findContours(
-            mask_array,
-            cv2.RETR_EXTERNAL,
-            cv2.CHAIN_APPROX_SIMPLE
-        )
-
-        filled_mask = np.zeros_like(mask_array)
-
-        if contours:
-
-            largest_contour = max(
-                contours,
-                key=cv2.contourArea
-            )
-
-            if cv2.contourArea(largest_contour) > 0:
-
-                cv2.drawContours(
-                    filled_mask,
-                    [largest_contour],
-                    -1,
-                    255,
-                    cv2.FILLED
-                )
+        # Fill the ellipse outline at ORIGINAL resolution, then resize
+        # (resizing the 1-px outline first produced empty masks; see ml/masks.py).
+        filled_mask = annotation_to_mask(mask_path, IMAGE_SIZE)
 
         # Convert to tensors
         image_tensor = torch.from_numpy(
@@ -266,31 +223,9 @@ def dice_loss(
 # 6. DICE METRIC
 # ============================================================
 
-def dice_metric(
-    logits,
-    target,
-    epsilon=1e-7
-):
-
-    predictions = (
-        torch.sigmoid(logits) > 0.5
-    ).float()
-
-    intersection = (
-        predictions * target
-    ).sum(dim=(1, 2, 3))
-
-    denominator = (
-        predictions.sum(dim=(1, 2, 3))
-        + target.sum(dim=(1, 2, 3))
-    )
-
-    score = (
-        (2.0 * intersection + epsilon)
-        / (denominator + epsilon)
-    )
-
-    return float(score.mean().item())
+def dice_metric(logits, target):
+    """Mean hard Dice; empty targets are undefined (NaN) and never count as 1.0."""
+    return float(torch.nanmean(dice_per_sample(logits, target)).item())
 
 
 # ============================================================

@@ -1,0 +1,18 @@
+{
+  "annotations_checked": 999,
+  "before_fix": {
+    "pipeline": "resize outline to 128 (NEAREST) -> findContours -> FILLED",
+    "empty_masks": 999,
+    "nearly_empty_masks_lt_1pct": 999,
+    "mean_foreground_fraction": 0.0,
+    "median_foreground_fraction": 0.0
+  },
+  "after_fix": {
+    "pipeline": "fitEllipse on outline at original resolution -> filled ellipse -> resize to 256",
+    "empty_masks": 0,
+    "nearly_empty_masks_lt_1pct": 0,
+    "mean_foreground_fraction": 0.3011152021161787,
+    "min_foreground_fraction": 0.0356292724609375,
+    "max_foreground_fraction": 0.576263427734375
+  }
+}
