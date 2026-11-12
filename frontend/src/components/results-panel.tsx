@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertTriangle, CheckCircle2, Download, FileJson, Printer } from "lucide-react";
+import { useState } from "react";
 
 import { GrowthPanel } from "@/components/growth-panel";
 import { MetricCard } from "@/components/metric-card";
@@ -32,6 +33,15 @@ export function ResultsPanel({ result, originalUrl, fileName, onOverride, overri
   const stem = fileName.replace(/\.[^.]+$/, "");
   const e = result.ellipse;
   const flags = result.quality.flags;
+  const u = result.uncertainty;
+  const [view, setView] = useState<"segmentation" | "uncertainty">("segmentation");
+  const showUnc = view === "uncertainty" && result.uncertainty_png_base64 !== null;
+  const hcValue =
+    result.head_circumference_mm === null
+      ? "—"
+      : u?.hc_sd_mm !== null && u?.hc_sd_mm !== undefined
+        ? `${result.head_circumference_mm.toFixed(1)} ± ${u.hc_sd_mm.toFixed(1)}`
+        : result.head_circumference_mm.toFixed(1);
 
   const downloadJson = () => {
     const { mask_png_base64: _m, overlay_png_base64: _o, ...rest } = result;
@@ -86,7 +96,12 @@ export function ResultsPanel({ result, originalUrl, fileName, onOverride, overri
           <div className="grid gap-3 sm:grid-cols-3">
             {[
               { label: "Original", src: originalUrl },
-              { label: "Overlay + fitted ellipse", src: dataUrl(result.overlay_png_base64) },
+              showUnc
+                ? {
+                    label: `Uncertainty map (SD of ${u?.n_passes ?? 8} TTA passes)`,
+                    src: dataUrl(result.uncertainty_png_base64!),
+                  }
+                : { label: "Overlay + fitted ellipse", src: dataUrl(result.overlay_png_base64) },
               { label: "Predicted mask", src: dataUrl(result.mask_png_base64) },
             ].map((img) => (
               <figure key={img.label} className="overflow-hidden rounded-lg border bg-black">
@@ -96,13 +111,34 @@ export function ResultsPanel({ result, originalUrl, fileName, onOverride, overri
               </figure>
             ))}
           </div>
+          {result.uncertainty_png_base64 && (
+            <div className="mt-3 flex flex-wrap items-center gap-2 print:hidden" role="group" aria-label="Overlay view">
+              <span className="text-xs text-muted-foreground">Overlay:</span>
+              <Button
+                size="sm"
+                variant={view === "segmentation" ? "default" : "outline"}
+                onClick={() => setView("segmentation")}
+                aria-pressed={view === "segmentation"}
+              >
+                Segmentation
+              </Button>
+              <Button
+                size="sm"
+                variant={view === "uncertainty" ? "default" : "outline"}
+                onClick={() => setView("uncertainty")}
+                aria-pressed={view === "uncertainty"}
+              >
+                Uncertainty map
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <MetricCard
           label="Head circumference"
-          value={result.head_circumference_mm !== null ? result.head_circumference_mm.toFixed(1) : "—"}
+          value={hcValue}
           unit={result.head_circumference_mm !== null ? "mm" : undefined}
           hint={
             result.measurement_withheld
@@ -125,11 +161,19 @@ export function ResultsPanel({ result, originalUrl, fileName, onOverride, overri
           unit={result.head_area_mm2 !== null ? "cm²" : "px"}
           hint={`${pct(result.quality.mask_area_fraction)} of image`}
         />
-        <MetricCard
-          label="Model confidence"
-          value={pct(result.quality.mean_confidence)}
-          hint={`${pct(result.quality.uncertain_fraction)} uncertain boundary · ${result.inference_ms.toFixed(0)} ms`}
-        />
+        {u ? (
+          <MetricCard
+            label="Reliability"
+            value={u.low_reliability ? "Low: re-scan" : "OK"}
+            hint={`TTA ${u.n_passes} passes · CV ${u.hc_cv_percent !== null ? `${u.hc_cv_percent.toFixed(2)}%` : "—"} · disagreement ${pct(u.disagreement_fraction)} · ${result.inference_ms.toFixed(0)} ms`}
+          />
+        ) : (
+          <MetricCard
+            label="Model confidence"
+            value={pct(result.quality.mean_confidence)}
+            hint={`${pct(result.quality.uncertain_fraction)} uncertain boundary · ${result.inference_ms.toFixed(0)} ms`}
+          />
+        )}
       </div>
 
       {result.growth && result.head_circumference_mm !== null && (
@@ -173,10 +217,15 @@ export function ResultsPanel({ result, originalUrl, fileName, onOverride, overri
                 term="Ellipse fit ratio"
                 value={result.quality.ellipse_fit_ratio?.toFixed(3) ?? "—"}
               />
+              <Detail term="Model confidence" value={pct(result.quality.mean_confidence)} />
+              {u?.hc_mean_mm !== null && u?.hc_mean_mm !== undefined && (
+                <Detail term="TTA mean HC" value={`${u.hc_mean_mm.toFixed(1)} mm (${u.n_passes} passes)`} />
+              )}
               <Detail term="Model" value={<Badge variant="secondary">{result.model_version}</Badge>} />
             </dl>
             <p className="mt-4 text-xs text-muted-foreground">
               HC = perimeter of the ellipse fitted to the segmented head (Ramanujan approximation) × pixel spacing.
+              {u && " ± is the SD of HC over test-time-augmented passes (flip, zoom, gamma), not a confidence interval."}
             </p>
           </CardContent>
         </Card>

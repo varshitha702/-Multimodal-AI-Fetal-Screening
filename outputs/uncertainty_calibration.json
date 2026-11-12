@@ -1,0 +1,24 @@
+{
+  "rule": "thresholds = 90th percentile on the validation split; flag if either is exceeded",
+  "thresholds": {
+    "hc_cv_percent": 1.0547,
+    "disagreement_fraction": 0.0999
+  },
+  "primary_hc": "single",
+  "primary_rule": "lower validation MAE of single pass vs TTA mean",
+  "validation_mae_mm": {
+    "single": 1.843,
+    "tta_mean": 1.861
+  },
+  "validation_n": 152,
+  "transforms": [
+    "identity",
+    "hflip",
+    "zoom_out_0.9",
+    "zoom_in_1.1",
+    "gamma_0.8",
+    "gamma_1.25",
+    "hflip_zoom_0.9",
+    "hflip_zoom_1.1"
+  ]
+}

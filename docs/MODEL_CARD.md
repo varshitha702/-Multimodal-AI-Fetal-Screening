@@ -1,4 +1,4 @@
-# Model cards: HC18 U-Net and standard-plane gate
+# Model cards: HC18 U-Net, standard-plane gate and TTA uncertainty
 
 # Model card: FetalAI HC18 U-Net
 
@@ -79,8 +79,9 @@ from the geometry code (`tests/test_geometry.py`).
 * Quality indicators in the API (mean confidence, uncertain-boundary fraction, border contact, ellipse-fit
   ratio) are **heuristics**. On the test split they correlate only weakly with HC error (Spearman ≈ 0.1);
   the uncertain-boundary flag (> 5 % of pixels with 0.3 < p < 0.7) fired on 3 / 151 images, including the
-  worst case. Thresholds were set before the test evaluation. They are not calibrated uncertainty
-  (calibration / MC-dropout is Phase-2).
+  worst case. Thresholds were set before the test evaluation. They are not calibrated uncertainty.
+  Feature B adds test-time-augmentation uncertainty (HC ± SD, Spearman ρ 0.27 with the real error), see the
+  addendum at the end.
 * Image-level resize to a square distorts the aspect ratio; this is undone before measurement.
 
 ## Bug history
@@ -210,3 +211,74 @@ even inside FETAL_PLANES_DB. The threshold was **not** re-tuned on HC18. For dem
 * It classifies the plane; it does not score image quality within the plane (e.g. symmetry, calliper
   landmarks). It does not see the HC18 annotations.
 * Calibration was fitted and checked in-distribution; calibrated probabilities on other scanners may be off.
+
+---
+
+# Model card addendum: measurement uncertainty by test-time augmentation (Feature B)
+
+Owners: Nachiketha K G (method and evaluation), Vishwas K (API), Rakshitha V (UI).
+
+## Method (`ml/uncertainty.py`)
+
+The trained U-Net is run **8 times** per image under label-preserving transforms: identity, horizontal flip,
+zoom 0.9 and 1.1, gamma 0.8 and 1.25, flip + zoom 0.9, flip + zoom 1.1. Every geometric transform is
+**undone** on the probability map before combining (pixels a zoom-in pushed out of view fall back to the
+identity pass). From the 8 passes:
+
+* **HC ± SD:** an ellipse and HC per pass; SD over passes (and CV = SD / mean);
+* **uncertainty map:** per-pixel SD of the 8 probability maps (heat-map overlay in the UI);
+* **disagreement fraction:** pixels where the 8 binary masks do not all agree / their union.
+
+**Low reliability, re-scan** is flagged if CV or disagreement exceeds its threshold. Rules fixed **before**
+running, on the **validation** split (n = 152), stored in `outputs/uncertainty_calibration.json`:
+
+| | Rule | Value |
+|---|---|---|
+| CV threshold | 90th percentile on validation | **1.05 %** |
+| Disagreement threshold | 90th percentile on validation | **0.100** |
+| Reported HC | lower validation MAE of single pass (1.843 mm) vs TTA mean (1.861 mm) | **single pass**; ± is the TTA SD |
+
+## Results on the held-out test split (n = 151), `python -m ml.evaluate_uncertainty`
+
+| Question | Result |
+|---|---|
+| Does the SD track the real error? Spearman(HC SD mm, \|HC error\| mm) | **ρ = 0.27** (95 % bootstrap CI 0.11–0.41, p < 0.001) |
+| Relative: Spearman(CV %, \|HC error\| %) | ρ = 0.27 (CI 0.11–0.42, p < 0.001) |
+| Spearman(disagreement, \|HC error\|) | ρ = 0.15 (CI −0.02 to 0.31, p = 0.08): **not significant** |
+| HC SD distribution | median 0.38 mm, 90th percentile 1.42 mm, max 14.2 mm |
+| Flagged "low reliability" | **17 / 151 (11 %)** |
+| MAE of flagged vs unflagged images | **3.68 mm vs 1.99 mm** |
+| Largest 10 % of errors (≥ 4.66 mm) that were flagged | 6 / 16 |
+| MAE single pass vs TTA mean | 2.183 vs 2.191 mm (TTA does not improve accuracy) |
+
+**Honest reading.** The correlation is real but weak-to-moderate: the flag catches images that are, on average,
+almost twice as wrong, but a low SD does not guarantee an accurate HC (10 of the 16 largest errors were not
+flagged). The worst Phase-1 test image, `022_2HC` (error 11.6 mm), gets the second-highest SD (7.8 mm) and is
+flagged. 11 of the 17 flagged test images are also rejected by the plane gate (mostly early-gestation heads),
+so the two checks overlap but are not redundant: e.g. `794_HC` passes the plane gate (P(TT) 0.91) and is
+flagged by TTA (HC 301.4 ± 14.2 mm vs reference 308.5 mm).
+
+Figures: `docs/screenshots/uncertainty_vs_error.png` (scatter, flagged in red),
+`docs/screenshots/uncertainty_examples.png` (uncertainty maps, lowest to highest SD).
+
+## Latency
+
+| Setting | Without TTA | With TTA (8 passes) |
+|---|---|---|
+| Docker backend, CPU (Linux VM), API round trip | 0.22–0.24 s | **0.99–1.06 s** |
+| Laptop GPU server (Windows), API round trip | 0.40–0.44 s | 1.21–1.28 s |
+| Model only, RTX 4050, fresh process | 40–50 ms | 230–260 ms |
+
+Notes: on the CPU the 8 passes run one at a time, because a batch of 8 was ~5× slower per image than single
+passes on this machine. This Windows laptop throttles background processes after a few seconds of sustained
+load, which inflates in-process timings (raw numbers in `outputs/uncertainty_metrics.json`,
+`docs/evidence/docker_tta_latency.txt`). The API has `uncertainty=false` for a fast single-pass result.
+Response PNGs are now encoded without `optimize` (about 7× faster, 5 % larger), which also sped up the Phase-1
+path.
+
+## Limitations
+
+* TTA measures sensitivity to small input changes, not all sources of error (e.g. a consistently wrong
+  boundary has a low SD). It is not a calibrated confidence interval.
+* Thresholds come from 152 validation images of one dataset; they are not validated on other scanners.
+* The transforms (flip, ±10 % zoom, gamma) are a design choice; other choices would give other SDs.

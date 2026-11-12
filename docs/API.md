@@ -10,7 +10,7 @@ Base URL (local): `http://localhost:8000`. Interactive docs: `/docs` (Swagger UI
 |---|---|---|
 | GET | `/api/v1/health` | Liveness and readiness (`ok`, or `degraded` if the model is not loaded) |
 | GET | `/api/v1/model-info` | Architecture, checkpoint, validation Dice, held-out test metrics |
-| POST | `/api/v1/predict` | **Plane check**, then segment the fetal head, measure head circumference, optional GA centile |
+| POST | `/api/v1/predict` | **Plane check**, then segment the fetal head, measure head circumference, optional GA centile, **HC ± SD by test-time augmentation** |
 | POST | `/api/v1/plane-check` | Only the standard-plane quality gate (which plane is this; is it trans-thalamic?) |
 | GET | `/api/v1/reference/hc-centiles` | INTERGROWTH-21st HC centile curves (3rd/10th/50th/90th/97th), 14–40 weeks |
 
@@ -29,7 +29,8 @@ every response reports the plane check as `unavailable`.
 Returns `name`, `architecture`, `input_size`, `device`, `checkpoint_epoch`, `validation_dice`,
 `test_metrics` (contents of `outputs/test_metrics.json`), `training_data`, `intended_use`, `disclaimer`, and
 `plane_classifier` (architecture, epoch, temperatures, `tt_threshold`, threshold rule and official-test metrics
-from `outputs/plane_metrics.json`; `null` if the plane model is not loaded).
+from `outputs/plane_metrics.json`; `null` if the plane model is not loaded), and `uncertainty` (TTA passes,
+validation thresholds, held-out test evaluation; `null` without `outputs/uncertainty_calibration.json`).
 503 if the model is not loaded.
 
 ### POST /api/v1/predict
@@ -42,8 +43,9 @@ from `outputs/plane_metrics.json`; `null` if the plane model is not loaded).
 | `pixel_size_mm` | number | no | 0 < value ≤ 1.0 (mm per pixel). Without it, HC and area in mm are `null` |
 | `gestational_age_weeks` | number | no | 14 ≤ value ≤ 40, exact weeks (22+3 → 22.43). With HC available, adds a `growth` block |
 | `override_plane_check` | boolean | no | Default `false`. If the plane check warns, measure anyway (the warning is kept) |
+| `uncertainty` | boolean | no | Default `true`: run 8 test-time-augmented passes for HC ± SD, the uncertainty map and the low-reliability flag. `false` = faster single pass |
 
-**Order of operations:** validate → decode → **plane check** → U-Net → ellipse → HC → centile. If
+**Order of operations:** validate → decode → **plane check** → U-Net → ellipse → HC → centile → **TTA uncertainty**. If
 `plane_check.status` is `"warn"` and `override_plane_check` is not set, the response has
 `measurement_withheld: true` and `head_circumference_mm`, `head_area_mm2`, the ellipse sizes in mm and `growth`
 are `null`; the mask and overlay are still returned so the user can see the image.
@@ -88,6 +90,24 @@ request returns `measurement_withheld: true` and `head_circumference_mm: null`:
 * `plane_check`: `status` is `pass` (calibrated P(trans-thalamic) = P(brain) × P(TT | brain) ≥ `threshold`),
   `warn`, or `unavailable` (no plane model). `message` is plain language; `overridden` is true when the
   measurement was forced. Threshold and calibration come from the validation set (`MODEL_CARD.md`).
+* `uncertainty` (unless `uncertainty=false`): test-time augmentation, 8 passes (flip, zoom 0.9/1.1,
+  gamma 0.8/1.25 and combinations), each undone before combining. `head_circumference_mm` stays the single-pass
+  value (it had the lower validation MAE); show it as HC ± `hc_sd_mm`. `low_reliability` is true when
+  `hc_cv_percent` or `disagreement_fraction` exceeds its validation-chosen threshold, and then the first
+  `quality.flags` entry is "Low reliability, re-scan recommended: …". When the measurement is withheld by the
+  plane gate, the TTA HC values are withheld too. Real example, held-out test image `794_HC.png`
+  (reference HC 308.5 mm; `head_circumference_mm` 301.39):
+
+  ```json
+  "uncertainty": { "n_passes": 8, "hc_mean_mm": 295.34, "hc_sd_mm": 14.17, "hc_cv_percent": 4.796,
+    "hc_passes_mm": [301.39, 301.58, 306.46, 270.16, 295.92, 304.34, 306.58, 276.27],
+    "disagreement_fraction": 0.3177, "low_reliability": true,
+    "reasons": ["HC varies across 8 augmented passes (CV 4.80 % > 1.05 %).",
+                "Augmented passes disagree on 31.8% of the head region (> 10.0%)."],
+    "thresholds": { "hc_cv_percent": 1.0547, "disagreement_fraction": 0.0999 }, "tta_ms": 276.9 }
+  ```
+* `uncertainty_png_base64`: per-pixel SD of the 8 probability maps as a heat-map overlay (PNG).
+* `inference_ms` covers the plane check, segmentation and (if on) TTA.
 * `mask_png_base64`: binary mask (0/255) at the original resolution.
 * `overlay_png_base64`: image with the mask (green) and fitted ellipse (yellow).
 * `growth` (only with `gestational_age_weeks` and a measured HC): the HC compared with the INTERGROWTH-21st
@@ -115,8 +135,9 @@ Real response for a FETAL_PLANES_DB test femur image (`Patient00647_Plane5_1_of_
   "model_version": "planes-effnetb0-epoch16" }
 ```
 
-Latency (laptop, one 800 × 540 image): plane check 31 ms on CPU / 61 ms on the RTX 4050; a full `/predict`
-round trip is about 0.3 s on the GPU (curl to `127.0.0.1`).
+Latency (one 800 × 540 image): plane check 31 ms on CPU / 61 ms on the RTX 4050. Full `/predict` round trip
+(curl to `127.0.0.1`): Docker CPU backend 0.22–0.24 s with `uncertainty=false`, 0.99–1.06 s with TTA; laptop GPU
+server 0.40–0.44 s and 1.21–1.28 s (`docs/evidence/docker_tta_latency.txt`).
 
 ## Errors
 
@@ -131,7 +152,7 @@ All errors share one format:
 | 400 | `invalid_image` | Empty, truncated or corrupted file (`PIL.Image.verify`), undecodable, smaller than 64 px, larger than 20 MP |
 | 413 | `file_too_large` | Upload larger than `FETALAI_MAX_UPLOAD_MB` (default 10). Read in 1 MB chunks and rejected as soon as the limit is passed |
 | 415 | `unsupported_media_type` | Declared type is not `image/png` / `image/jpeg`, or the decoded format is not PNG/JPEG (e.g. a GIF renamed `.png`) |
-| 422 | `validation_error` | Missing `file`, `pixel_size_mm` not a number in (0, 1], `gestational_age_weeks` not in [14, 40], or `override_plane_check` not a boolean. `details` lists the field and reason |
+| 422 | `validation_error` | Missing `file`, `pixel_size_mm` not a number in (0, 1], `gestational_age_weeks` not in [14, 40], or `override_plane_check` / `uncertainty` not a boolean. `details` lists the field and reason |
 | 503 | `model_not_loaded` | Checkpoint missing or failed to load at startup |
 
 ## Configuration

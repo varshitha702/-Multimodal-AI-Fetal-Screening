@@ -1,0 +1,6 @@
+# Docker backend image (CPU, Linux VM) with TTA uncertainty, 12 Nov 2026
+# 794_HC.png (held-out test), pixel_size_mm 0.18122062; 3 requests each, 2 s apart, after one warm-up
+uncertainty=true : HC 301.39 mm, SD 14.15 mm, low_reliability true, inference_ms 874-957, tta_ms 700-761, round trip 0.99-1.06 s
+uncertainty=false: HC 301.39 mm,                                   inference_ms 118-136,                round trip 0.22-0.24 s
+# Same image on the laptop GPU server (Windows, uvicorn): round trip 1.21-1.28 s with TTA, 0.40-0.44 s without
+# (544_HC.png); this Windows laptop throttles background processes under sustained load, see MODEL_CARD.md.

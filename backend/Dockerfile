@@ -22,6 +22,7 @@ COPY ml ml
 COPY backend backend
 COPY outputs/test_metrics.json outputs/test_metrics.json
 COPY outputs/plane_metrics.json outputs/plane_metrics.json
+COPY outputs/uncertainty_calibration.json outputs/uncertainty_metrics.json outputs/
 
 RUN useradd --create-home --uid 10001 app
 USER app

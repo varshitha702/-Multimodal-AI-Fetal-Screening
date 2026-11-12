@@ -8,22 +8,25 @@ Raw logs: `docs/evidence/pytest_run.txt`, `docs/evidence/frontend_smoke_run.txt`
 
 | Suite | Tool | Cases | Passed | Failed | Skipped |
 |---|---|---|---|---|---|
-| Backend API (T01–T32) | pytest + FastAPI TestClient | 38 (T18 and T24 have 4 inputs each) | 38 | 0 | 0 |
+| Backend API (T01–T38) | pytest + FastAPI TestClient | 44 (T18 and T24 have 4 inputs each) | 44 | 0 | 0 |
 | ML unit / integration (U01–U32) | pytest | 32 | 32 | 0 | 0 |
 | Plane quality gate (P01–P13) | pytest | 13 | 13 | 0 | 0 |
+| TTA uncertainty (Q01–Q09) | pytest | 14 (Q01 has 6 transforms) | 14 | 0 | 0 |
 | INTERGROWTH-21st verification (G01–G08) | pytest | 14 (incl. all 189 published table cells) | 14 | 0 | 0 |
 | Frontend smoke (S1–S3) | `node --test` against `next start` | 3 | 3 | 0 | 0 |
-| End-to-end UI (E01–E14) | Playwright + Chrome, live backend and GPU models | 14 | 14 | 0 | 0 |
-| **Total** | | **114** | **114** | **0** | **0** |
+| End-to-end UI (E01–E17) | Playwright + Chrome, live backend and GPU models | 17 | 17 | 0 | 0 |
+| **Total** | | **137** | **137** | **0** | **0** |
 
 Feature A (standard-plane gate) added T26–T32, P01–P13 and the plane steps in E03, E04, E12 and E13;
-the Python suite is **97 passed** locally (`docs/evidence/pytest_run.txt`).
+Feature B (TTA uncertainty) added T33–T38, Q01–Q09 and E13–E15. The Python suite is **117 passed** locally
+(`docs/evidence/pytest_run.txt`). The API contract tests send `uncertainty=false` by default (8 CPU passes per
+request would make them slow); T33–T38 exercise the TTA path.
 
 Static checks: `ruff check .` (Python) clean; `npm run lint`, `npm run typecheck`, `npm run build` clean.
 
 Screenshot of the pytest run: `docs/screenshots/test_run_pytest.png`.
 
-**GitHub Actions CI** (run 43262443536, PR #12 plane gate): Python job **93 passed, 4 skipped**, ruff clean, frontend job passed. Before that (run 43239985081): Python job **73 passed, 4 skipped** (51 + 4 skipped before step 5, run
+**GitHub Actions CI** (run 43270591582, PR #13 TTA uncertainty): Python job **113 passed, 4 skipped**, ruff clean, frontend job passed. PR #12 plane gate (run 43262443536): Python job **93 passed, 4 skipped**, ruff clean, frontend job passed. Before that (run 43239985081): Python job **73 passed, 4 skipped** (51 + 4 skipped before step 5, run
 43235961106), ruff clean; frontend job lint + build + smoke passed. The dataset and trained checkpoint are not in the repository, so the four tests
 that need them (U05, U14, U27, U32, marked *data* below) are skipped in CI and run locally. The API tests never
 need them: they use a randomly initialised checkpoint created in a temp folder.
@@ -74,6 +77,12 @@ python scripts/ui_e2e.py
 | T30 | Boundary | No plane checkpoint | `status=unavailable`, measurement not withheld | Pass |
 | T31 | Normal/negative | `POST /plane-check` | 200 block (warn / unavailable); PDF → 415; junk bytes → 400 | Pass |
 | T32 | Negative | `override_plane_check=maybe` | 422 | Pass |
+| T33 | Normal | Default `/predict` (TTA on) | `uncertainty` block: 8 passes, disagreement in [0, 1], thresholds from the committed calibration; uncertainty PNG at original size | Pass |
+| T34 | Normal | `uncertainty=false` | `uncertainty` and its PNG are `null` | Pass |
+| T35 | Normal | Thresholds forced to −1 | `low_reliability=true`, reasons, first quality flag "Low reliability, re-scan recommended" | Pass |
+| T36 | Boundary | No calibration file | No flag, `thresholds=null` | Pass |
+| T37 | Normal | Plane gate warns + TTA | TTA HC mean/SD/passes withheld with the measurement; disagreement still reported | Pass |
+| T38 | Normal/negative | `/model-info`; `uncertainty=sometimes` | `uncertainty` info (8 passes, primary HC); 422 | Pass |
 
 The API tests use random-weight checkpoints written to a temp folder, so the gate outcome is forced through the
 stored threshold (0 → always pass, 1.01 → always warn). They test the contract, not classifier accuracy.
@@ -150,6 +159,20 @@ intergrowth21.com `grow_fetal-zs_hc_table.pdf`).
 | P12 | Unknown plane label rejected | Pass |
 | P13 | Split file round trip | Pass |
 
+## TTA uncertainty test cases (`tests/test_uncertainty.py`)
+
+| ID | Case | Result |
+|---|---|---|
+| Q01 | Undoing each geometric transform (×6) recovers the image inside the valid region | Pass |
+| Q02 | Flip is exact; a zoom-in marks the lost border as invalid | Pass |
+| Q03 | Gamma changes intensity only (no geometric undo) | Pass |
+| Q04 | Stub segmenter on a clean ellipse: 8 HCs, mean = Ramanujan HC (±3 %), CV < 1 %, low disagreement | Pass |
+| Q05 | No pixel spacing → no HC mean / SD | Pass |
+| Q06 | Blank image → no HC, disagreement 0 | Pass |
+| Q07 | Colour input rejected | Pass |
+| Q08 | Reliability reasons: CV, disagreement, failed fits; no calibration → no flag | Pass |
+| Q09 | Uncertainty heat-map overlay keeps the image where SD = 0 | Pass |
+
 ## Frontend smoke test (`frontend/tests/smoke.test.mjs`)
 
 | ID | Case | Result |
@@ -177,8 +200,11 @@ Real Chrome, real backend, trained models on the GPU. Demo image `006_HC.png` is
 | E10 | Mobile (390 px): results render, no horizontal scroll | Pass |
 | E11 | Gestational age outside 14–40 weeks rejected in the form (Analyse disabled) | Pass |
 | E12 | GA 20+0 (example input; HC18 has no GA) on `544_HC.png` → plane check PASS, centile card (42nd) and chart | Pass |
-| E13 | FETAL_PLANES_DB test femur image → plane check WARN ("femur"), HC withheld | Pass |
-| E14 | Swagger UI lists the endpoints | Pass |
+| E13 | `544_HC.png`: HC shown as HC ± TTA SD (170.9 ± 1.6 mm), reliability OK | Pass |
+| E14 | Overlay toggle switches to the TTA uncertainty map | Pass |
+| E15 | `794_HC.png` (held-out test, passes the plane gate): reliability "Low: re-scan" and the quality warning | Pass |
+| E16 | FETAL_PLANES_DB test femur image → plane check WARN ("femur"), HC withheld | Pass |
+| E17 | Swagger UI lists the endpoints | Pass |
 
 The Phase-1 E01–E12 (before the plane gate) also passed against the **Docker Compose** stack:
 `docs/evidence/ui_e2e_docker_run.txt`.
@@ -186,7 +212,8 @@ The Phase-1 E01–E12 (before the plane gate) also passed against the **Docker C
 ## Model evaluation
 
 Held-out test metrics (Dice 0.973, HC MAE 2.18 mm; plane gate accuracy 94.0 %, TT acceptance 95.7 %) are
-documented in [`MODEL_CARD.md`](MODEL_CARD.md).
+documented in [`MODEL_CARD.md`](MODEL_CARD.md), together with the TTA uncertainty evaluation (Spearman ρ 0.27
+between HC SD and HC error on the test split).
 
 ## Known issues
 

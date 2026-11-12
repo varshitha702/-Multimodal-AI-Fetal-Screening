@@ -1,0 +1,67 @@
+{
+  "split": "held-out test (group-level, seed 42)",
+  "n": 151,
+  "n_passes": 8,
+  "primary_hc": "single",
+  "hc_mae_mm": {
+    "single": 2.183,
+    "tta_mean": 2.191
+  },
+  "hc_sd_mm": {
+    "median": 0.378,
+    "p90": 1.422,
+    "max": 14.165
+  },
+  "spearman": {
+    "sd_mm_vs_abs_error_mm": {
+      "rho": 0.268,
+      "p_value": 0.000896,
+      "ci95": [
+        0.111,
+        0.406
+      ],
+      "n": 151
+    },
+    "cv_percent_vs_abs_error_percent": {
+      "rho": 0.271,
+      "p_value": 0.000764,
+      "ci95": [
+        0.106,
+        0.421
+      ],
+      "n": 151
+    },
+    "disagreement_vs_abs_error_mm": {
+      "rho": 0.145,
+      "p_value": 0.0756,
+      "ci95": [
+        -0.015,
+        0.306
+      ],
+      "n": 151
+    }
+  },
+  "flag": {
+    "thresholds": {
+      "hc_cv_percent": 1.0547,
+      "disagreement_fraction": 0.0999
+    },
+    "flagged": 17,
+    "flagged_rate": 0.1126,
+    "mae_flagged_mm": 3.68,
+    "mae_unflagged_mm": 1.994,
+    "largest_10pct_errors_flagged": "6 / 16",
+    "largest_10pct_errors_threshold_mm": 4.656
+  },
+  "latency": {
+    "cuda": {
+      "single_pass_ms": 49.7,
+      "tta_ms": 256.1
+    },
+    "cpu": {
+      "single_pass_ms": 788.4,
+      "tta_ms": 5591.3
+    },
+    "note": "per image, 800x540, laptop (RTX 4050 / CPU), model only (no HTTP, no PNG encoding). CPU measured in a fresh CPU-only process, but this laptop throttles a background process after a few seconds of load, so the CPU numbers are pessimistic: in un-throttled bursts a single pass took 71-90 ms and TTA ~630 ms."
+  }
+}

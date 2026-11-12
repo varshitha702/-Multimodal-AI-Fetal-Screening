@@ -15,6 +15,15 @@ All notable changes are listed here. Format: [Keep a Changelog](https://keepacha
 - UI: plane-check badge (PASS / WARN / N/A, calibrated confidence, P(TT) vs threshold) before the HC result,
   "Measure anyway (override)" button, plane check on the printed report, plane-gate section on the model page.
 - Tests: T26–T32, P01–P13, E03/E04/E12/E13 (114 total). ADR-0006. Docker mounts the plane checkpoint.
+- **Measurement uncertainty (Feature B):** 8-pass test-time augmentation with transforms undone before
+  combining; HC ± SD, uncertainty map, mask disagreement; "low reliability, re-scan" flag with thresholds at the
+  validation 90th percentile (CV 1.05 %, disagreement 0.100). Held-out test: Spearman ρ(SD, |error|) 0.27
+  (95 % CI 0.11–0.41); flagged 11 %, MAE 3.68 vs 1.99 mm. API `uncertainty` field and block,
+  `uncertainty_png_base64`; UI HC ± SD, reliability card, overlay toggle; T33–T38, Q01–Q09, E13–E15
+  (137 total); ADR-0007.
+
+### Changed
+- Response PNGs are encoded without `optimize` (about 7× faster, about 5 % larger).
 
 ## [1.0.0] - 2026-11-12 (Phase-1 review build)
 
