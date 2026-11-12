@@ -1,0 +1,23 @@
+{
+  "model": "U-Net (base 32 channels)",
+  "parameters": 7762465,
+  "image_size": 256,
+  "batch_size": 16,
+  "optimizer": "Adam",
+  "initial_lr": 0.001,
+  "lr_schedule": "ReduceLROnPlateau(max val Dice, factor 0.5, patience 5)",
+  "loss": "BCE + soft Dice",
+  "amp": true,
+  "augmentation": "hflip, rotation +-15 deg, scale 0.9-1.1, brightness/contrast",
+  "early_stopping_patience": 15,
+  "seed": 42,
+  "device": "NVIDIA GeForce RTX 4050 Laptop GPU",
+  "train_images": 696,
+  "val_images": 152,
+  "epochs_run": 65,
+  "best_epoch": 50,
+  "best_val_dice": 0.976,
+  "best_val_iou": 0.9539,
+  "training_minutes": 11.4,
+  "note": "Validation metrics only. Held-out test results are produced by ml/evaluate.py."
+}

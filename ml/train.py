@@ -1,713 +1,179 @@
+"""Train the HC18 U-Net on the GPU.
 
+    python -m ml.train [--epochs 100] [--batch-size 16] [--size 256]
+
+Loss BCE + soft Dice, Adam, AMP, ReduceLROnPlateau, early stopping on validation Dice.
+Writes (outputs/): hc18_unet_best.pth (gitignored), training_history.csv,
+training_summary.json, training_curves.png.
+"""
 from __future__ import annotations
 
-import gc
+import argparse
 import json
 import random
 import time
 from pathlib import Path
 
-import cv2
-import numpy as np
-import pandas as pd
-import torch
-from PIL import Image
-from torch import nn
-from torch.utils.data import DataLoader, Dataset, Subset
+import matplotlib
 
-from ml.masks import annotation_to_mask
-from ml.metrics import dice_per_sample
-from ml.model import UNet
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt  # noqa: E402
+import numpy as np  # noqa: E402
+import pandas as pd  # noqa: E402
+import torch  # noqa: E402
+from torch import nn  # noqa: E402
+from torch.utils.data import DataLoader  # noqa: E402
 
-
-# ============================================================
-# 1. PROJECT PATHS
-# ============================================================
+from ml.dataset import HC18Dataset  # noqa: E402
+from ml.metrics import dice_per_sample, iou_per_sample, soft_dice_loss  # noqa: E402
+from ml.model import UNet  # noqa: E402
+from ml.split import SPLIT_PATH, load_split  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
-
-DATA_ROOT = ROOT / "data" / "raw" / "HC18"
-IMAGE_DIR = DATA_ROOT / "training_set"
-CSV_PATH = DATA_ROOT / "training_set_pixel_size_and_HC.csv"
-
-OUTPUT_DIR = ROOT / "outputs"
-CHECKPOINT_PATH = OUTPUT_DIR / "hc18_unet_best.pth"
-HISTORY_PATH = OUTPUT_DIR / "hc18_training_history.csv"
-METRICS_PATH = OUTPUT_DIR / "hc18_metrics.json"
-
-
-# ============================================================
-# 2. LOW-MEMORY TRAINING CONFIGURATION
-# ============================================================
-
-IMAGE_SIZE = 128
-BATCH_SIZE = 1
-EPOCHS = 20
-LEARNING_RATE = 1e-3
-VALIDATION_FRACTION = 0.20
-SEED = 42
-
-CPU_THREADS = 2
-LOG_EVERY = 50
-
-
-# ============================================================
-# 3. REPRODUCIBILITY AND RUNTIME SETTINGS
-# ============================================================
-
-def configure_runtime():
-
-    random.seed(SEED)
-    np.random.seed(SEED)
-    torch.manual_seed(SEED)
-
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(SEED)
-
-    torch.set_num_threads(CPU_THREADS)
-
-    try:
-        torch.set_num_interop_threads(1)
-    except RuntimeError:
-        pass
-
-
-# ============================================================
-# 4. HC18 DATASET
-# ============================================================
-
-class HC18Dataset(Dataset):
-
-    def __init__(self, augment=False):
-
-        self.augment = augment
-
-        if not CSV_PATH.is_file():
-            raise FileNotFoundError(
-                f"HC18 CSV file was not found:\n{CSV_PATH}"
-            )
-
-        if not IMAGE_DIR.is_dir():
-            raise FileNotFoundError(
-                f"HC18 image directory was not found:\n{IMAGE_DIR}"
-            )
-
-        table = pd.read_csv(CSV_PATH)
-
-        required_columns = {
-            "filename",
-            "pixel size(mm)",
-            "head circumference (mm)",
-        }
-
-        missing_columns = required_columns - set(table.columns)
-
-        if missing_columns:
-            raise ValueError(
-                f"Missing CSV columns: {sorted(missing_columns)}"
-            )
-
-        self.items = []
-        missing_pairs = []
-
-        for _, row in table.iterrows():
-
-            filename = str(row["filename"])
-
-            image_path = IMAGE_DIR / filename
-
-            mask_path = IMAGE_DIR / (
-                Path(filename).stem + "_Annotation.png"
-            )
-
-            if image_path.is_file() and mask_path.is_file():
-
-                self.items.append(
-                    (image_path, mask_path)
-                )
-
-            else:
-                missing_pairs.append(filename)
-
-        if not self.items:
-            raise RuntimeError(
-                f"No matching image-mask pairs found in {IMAGE_DIR}"
-            )
-
-        if missing_pairs:
-            print(
-                f"Warning: {len(missing_pairs)} pairs are missing."
-            )
-
-    def __len__(self):
-        return len(self.items)
-
-    def __getitem__(self, index):
-
-        image_path, mask_path = self.items[index]
-
-        # Load ultrasound image
-        with Image.open(image_path) as image_file:
-
-            image = image_file.convert("L")
-
-            image = image.resize(
-                (IMAGE_SIZE, IMAGE_SIZE),
-                Image.Resampling.BILINEAR
-            )
-
-        image_array = np.asarray(
-            image,
-            dtype=np.float32
-        ) / 255.0
-
-        # Fill the ellipse outline at ORIGINAL resolution, then resize
-        # (resizing the 1-px outline first produced empty masks; see ml/masks.py).
-        filled_mask = annotation_to_mask(mask_path, IMAGE_SIZE)
-
-        # Convert to tensors
-        image_tensor = torch.from_numpy(
-            image_array.copy()
-        ).unsqueeze(0)
-
-        mask_tensor = torch.from_numpy(
-            (filled_mask > 0).astype(np.float32)
-        ).unsqueeze(0)
-
-        # Training augmentation only
-        if self.augment and random.random() < 0.5:
-
-            image_tensor = torch.flip(
-                image_tensor,
-                dims=[2]
-            )
-
-            mask_tensor = torch.flip(
-                mask_tensor,
-                dims=[2]
-            )
-
-        return image_tensor, mask_tensor
-
-
-# ============================================================
-# 5. DICE LOSS
-# ============================================================
-
-def dice_loss(
-    logits,
-    target,
-    epsilon=1e-7
-):
-
-    probabilities = torch.sigmoid(logits)
-
-    intersection = (
-        probabilities * target
-    ).sum(dim=(1, 2, 3))
-
-    denominator = (
-        probabilities.sum(dim=(1, 2, 3))
-        + target.sum(dim=(1, 2, 3))
-    )
-
-    dice_score = (
-        (2.0 * intersection + epsilon)
-        / (denominator + epsilon)
-    )
-
-    return 1.0 - dice_score.mean()
-
-
-# ============================================================
-# 6. DICE METRIC
-# ============================================================
-
-def dice_metric(logits, target):
-    """Mean hard Dice; empty targets are undefined (NaN) and never count as 1.0."""
-    return float(torch.nanmean(dice_per_sample(logits, target)).item())
-
-
-# ============================================================
-# 7. TRAINING OR VALIDATION EPOCH
-# ============================================================
-
-def run_epoch(
-    model,
-    loader,
-    optimizer,
-    device,
-    training,
-    epoch,
-    total_epochs
-):
-
-    if training:
-
-        model.train()
-        phase = "TRAIN"
-
-    else:
-
-        model.eval()
-        phase = "VALIDATION"
-
-    bce_loss = nn.BCEWithLogitsLoss()
-
-    total_loss = 0.0
-    total_dice = 0.0
-    total_samples = 0
-
-    total_batches = len(loader)
-
-    start_time = time.time()
-
-    for batch_index, (images, masks) in enumerate(
-        loader,
-        start=1
-    ):
-
-        images = images.to(device)
-        masks = masks.to(device)
-
+OUT = ROOT / "outputs"
+CHECKPOINT_PATH = OUT / "hc18_unet_best.pth"
+
+
+def set_seed(seed: int) -> None:
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+
+
+def run_epoch(model, loader, device, optimizer=None, scaler=None):
+    """One pass over ``loader``. Trains if an optimizer is given. Returns (loss, dice, iou)."""
+    training = optimizer is not None
+    model.train(training)
+    bce = nn.BCEWithLogitsLoss()
+    total_loss, dices, ious = 0.0, [], []
+    for images, masks in loader:
+        images = images.to(device, non_blocking=True)
+        masks = masks.to(device, non_blocking=True)
+        with torch.set_grad_enabled(training), torch.autocast(device.type, enabled=device.type == "cuda"):
+            logits = model(images)
+            loss = bce(logits, masks) + soft_dice_loss(logits.float(), masks)
         if training:
             optimizer.zero_grad(set_to_none=True)
-
-        with torch.set_grad_enabled(training):
-
-            logits = model(images)
-
-            loss = (
-                bce_loss(logits, masks)
-                + dice_loss(logits, masks)
-            )
-
-            if training:
-
-                loss.backward()
-
-                optimizer.step()
-
-        current_batch_size = images.size(0)
-
-        total_loss += (
-            loss.item() * current_batch_size
-        )
-
-        batch_dice = dice_metric(
-            logits.detach(),
-            masks
-        )
-
-        total_dice += (
-            batch_dice * current_batch_size
-        )
-
-        total_samples += current_batch_size
-
-        del images
-        del masks
-        del logits
-        del loss
-
-        if (
-            batch_index % LOG_EVERY == 0
-            or batch_index == total_batches
-        ):
-
-            average_loss = (
-                total_loss / max(total_samples, 1)
-            )
-
-            average_dice = (
-                total_dice / max(total_samples, 1)
-            )
-
-            print(
-                f"\rEpoch {epoch}/{total_epochs} "
-                f"[{phase}] "
-                f"Batch {batch_index}/{total_batches} "
-                f"Loss: {average_loss:.4f} "
-                f"Dice: {average_dice:.4f}",
-                end="\n" if batch_index == total_batches else "",
-                flush=True
-            )
-
-    average_loss = (
-        total_loss / max(total_samples, 1)
-    )
-
-    average_dice = (
-        total_dice / max(total_samples, 1)
-    )
-
-    elapsed_seconds = time.time() - start_time
-
-    print(
-        f"{phase} completed in "
-        f"{elapsed_seconds / 60:.1f} minutes."
-    )
-
-    return average_loss, average_dice
-
-
-# ============================================================
-# 8. CREATE TRAINING AND VALIDATION LOADERS
-# ============================================================
-
-def create_dataloaders():
-
-    base_dataset = HC18Dataset(augment=False)
-
-    dataset_size = len(base_dataset)
-
-    validation_size = max(
-        1,
-        int(dataset_size * VALIDATION_FRACTION)
-    )
-
-    training_size = dataset_size - validation_size
-
-    if training_size < 1:
-
-        raise ValueError(
-            "Not enough samples for training and validation."
-        )
-
-    generator = torch.Generator().manual_seed(SEED)
-
-    shuffled_indices = torch.randperm(
-        dataset_size,
-        generator=generator
-    ).tolist()
-
-    validation_indices = shuffled_indices[:validation_size]
-
-    training_indices = shuffled_indices[validation_size:]
-
-    # Separate datasets prevent validation augmentation.
-    training_dataset = HC18Dataset(augment=True)
-
-    validation_dataset = HC18Dataset(augment=False)
-
-    training_subset = Subset(
-        training_dataset,
-        training_indices
-    )
-
-    validation_subset = Subset(
-        validation_dataset,
-        validation_indices
-    )
-
-    training_loader = DataLoader(
-        training_subset,
-        batch_size=BATCH_SIZE,
-        shuffle=True,
-        num_workers=0,
-        pin_memory=False
-    )
-
-    validation_loader = DataLoader(
-        validation_subset,
-        batch_size=1,
-        shuffle=False,
-        num_workers=0,
-        pin_memory=False
-    )
-
-    return (
-        training_loader,
-        validation_loader,
-        training_size,
-        validation_size
-    )
-
-
-# ============================================================
-# 9. SAVE BEST CHECKPOINT
-# ============================================================
-
-def save_checkpoint(
-    model,
-    epoch,
-    validation_dice
-):
-
-    OUTPUT_DIR.mkdir(
-        parents=True,
-        exist_ok=True
-    )
-
-    checkpoint_data = {
-
-        "model_state_dict": model.state_dict(),
-
-        "image_size": IMAGE_SIZE,
-
-        "best_val_dice": validation_dice,
-
-        "epoch": epoch,
-
-        "architecture": "HC18 U-Net"
-    }
-
-    temporary_path = CHECKPOINT_PATH.with_suffix(".tmp")
-
-    torch.save(
-        checkpoint_data,
-        temporary_path
-    )
-
-    temporary_path.replace(CHECKPOINT_PATH)
-
-    print("\nBest checkpoint saved:")
-    print(CHECKPOINT_PATH)
-
-
-# ============================================================
-# 10. MAIN TRAINING FUNCTION
-# ============================================================
-
-def main():
-
-    configure_runtime()
-
-    print("\n" + "=" * 58)
-
-    print("       FetalAI HC18 U-Net Training")
-
-    print("=" * 58)
-
-    print("Project directory:", ROOT)
-
-    print("Dataset directory:", IMAGE_DIR)
-
-    print("CSV file:", CSV_PATH)
-
-    print("Image size:", IMAGE_SIZE)
-
-    print("Training batch size:", BATCH_SIZE)
-
-    print("Validation batch size: 1")
-
-    print("Epochs:", EPOCHS)
-
-    print("Learning rate:", LEARNING_RATE)
-
-    print("CPU threads:", CPU_THREADS)
-
-    device = torch.device(
-        "cuda" if torch.cuda.is_available() else "cpu"
-    )
-
-    print("Training device:", device)
-
-    if device.type == "cpu":
-
-        print("Low-memory CPU mode: enabled")
-
-    # Verify dataset paths
-    if not CSV_PATH.is_file():
-
-        raise FileNotFoundError(
-            f"HC18 CSV not found: {CSV_PATH}"
-        )
-
-    if not IMAGE_DIR.is_dir():
-
-        raise FileNotFoundError(
-            f"HC18 image folder not found: {IMAGE_DIR}"
-        )
-
-    # Load dataset
-    (
-        training_loader,
-        validation_loader,
-        training_count,
-        validation_count
-    ) = create_dataloaders()
-
-    print("\nDataset successfully loaded.")
-
-    print("Training samples:", training_count)
-
-    print("Validation samples:", validation_count)
-
-    print(
-        "Total usable image-mask pairs:",
-        training_count + validation_count
-    )
-
-    # Initialize original U-Net architecture
-    print("\nInitializing U-Net model...")
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+        total_loss += loss.item() * len(images)
+        dices.append(dice_per_sample(logits.detach().float(), masks).cpu())
+        ious.append(iou_per_sample(logits.detach().float(), masks).cpu())
+    n = sum(len(d) for d in dices)
+    return (total_loss / n,
+            float(torch.nanmean(torch.cat(dices))),
+            float(torch.nanmean(torch.cat(ious))))
+
+
+def plot_history(history: pd.DataFrame, path: Path) -> None:
+    fig, (a, b) = plt.subplots(1, 2, figsize=(12, 4.2))
+    a.plot(history.epoch, history.train_loss, label="train")
+    a.plot(history.epoch, history.val_loss, label="validation")
+    a.set_title("Loss (BCE + Dice)")
+    a.set_xlabel("epoch")
+    a.legend()
+    b.plot(history.epoch, history.train_dice, label="train Dice")
+    b.plot(history.epoch, history.val_dice, label="validation Dice")
+    b.plot(history.epoch, history.val_iou, label="validation IoU", linestyle="--")
+    best = history.val_dice.idxmax()
+    b.scatter([history.epoch[best]], [history.val_dice[best]], color="red", zorder=5,
+              label=f"best val Dice {history.val_dice[best]:.4f} (epoch {history.epoch[best]})")
+    b.set_title("Segmentation metrics")
+    b.set_xlabel("epoch")
+    b.set_ylim(0, 1)
+    b.legend(loc="lower right")
+    fig.tight_layout()
+    fig.savefig(path, dpi=110)
+    plt.close(fig)
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--epochs", type=int, default=100)
+    ap.add_argument("--batch-size", type=int, default=16)
+    ap.add_argument("--size", type=int, default=256)
+    ap.add_argument("--lr", type=float, default=1e-3)
+    ap.add_argument("--patience", type=int, default=15)
+    ap.add_argument("--seed", type=int, default=42)
+    args = ap.parse_args()
+
+    set_seed(args.seed)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device_name = torch.cuda.get_device_name(0) if device.type == "cuda" else "cpu"
+    print(f"Device: {device} ({device_name})")
+
+    split = load_split()
+    t0 = time.time()
+    train_ds = HC18Dataset(split[split.split == "train"], args.size, train=True, seed=args.seed)
+    val_ds = HC18Dataset(split[split.split == "val"], args.size)
+    n_test = int((split.split == "test").sum())
+    print(f"Loaded train={len(train_ds)} val={len(val_ds)} in {time.time() - t0:.1f}s "
+          f"(test split of {n_test} images is held out)")
+
+    g = torch.Generator().manual_seed(args.seed)
+    train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, generator=g,
+                              num_workers=0, pin_memory=True, drop_last=True)
+    val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False, num_workers=0, pin_memory=True)
 
     model = UNet().to(device)
+    n_params = sum(p.numel() for p in model.parameters())
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="max", factor=0.5, patience=5)
+    scaler = torch.amp.GradScaler(enabled=device.type == "cuda")
 
-    optimizer = torch.optim.Adam(
-        model.parameters(),
-        lr=LEARNING_RATE
-    )
+    OUT.mkdir(exist_ok=True)
+    history, best_dice, best_epoch, stale = [], -1.0, 0, 0
+    start = time.time()
+    for epoch in range(1, args.epochs + 1):
+        e0 = time.time()
+        train_ds.set_epoch(epoch)
+        tr_loss, tr_dice, _ = run_epoch(model, train_loader, device, optimizer, scaler)
+        with torch.no_grad():
+            va_loss, va_dice, va_iou = run_epoch(model, val_loader, device)
+        lr = optimizer.param_groups[0]["lr"]
+        scheduler.step(va_dice)
+        history.append({"epoch": epoch, "lr": lr, "train_loss": tr_loss, "train_dice": tr_dice,
+                        "val_loss": va_loss, "val_dice": va_dice, "val_iou": va_iou,
+                        "seconds": round(time.time() - e0, 1)})
+        improved = va_dice > best_dice
+        if improved:
+            best_dice, best_epoch, stale = va_dice, epoch, 0
+            torch.save({"model_state_dict": model.state_dict(), "architecture": "UNet(base=32, in=1, out=1)",
+                        "image_size": args.size, "normalization": "grayscale / 255", "epoch": epoch,
+                        "best_val_dice": va_dice, "seed": args.seed, "split_file": SPLIT_PATH.name},
+                       CHECKPOINT_PATH)
+        else:
+            stale += 1
+        print(f"epoch {epoch:3d} | lr {lr:.1e} | train loss {tr_loss:.4f} dice {tr_dice:.4f} | "
+              f"val loss {va_loss:.4f} dice {va_dice:.4f} iou {va_iou:.4f} | {time.time() - e0:.0f}s"
+              + ("  *best*" if improved else ""), flush=True)
+        pd.DataFrame(history).to_csv(OUT / "training_history.csv", index=False)
+        if stale >= args.patience:
+            print(f"Early stopping: no val Dice improvement for {args.patience} epochs.")
+            break
 
-    OUTPUT_DIR.mkdir(
-        parents=True,
-        exist_ok=True
-    )
+    hist = pd.DataFrame(history)
+    plot_history(hist, OUT / "training_curves.png")
+    summary = {
+        "model": "U-Net (base 32 channels)", "parameters": n_params, "image_size": args.size,
+        "batch_size": args.batch_size, "optimizer": "Adam", "initial_lr": args.lr,
+        "lr_schedule": "ReduceLROnPlateau(max val Dice, factor 0.5, patience 5)", "loss": "BCE + soft Dice",
+        "amp": device.type == "cuda",
+        "augmentation": "hflip, rotation +-15 deg, scale 0.9-1.1, brightness/contrast",
+        "early_stopping_patience": args.patience, "seed": args.seed, "device": device_name,
+        "train_images": len(train_ds), "val_images": len(val_ds), "epochs_run": len(hist),
+        "best_epoch": best_epoch, "best_val_dice": round(best_dice, 4),
+        "best_val_iou": round(float(hist.loc[hist.val_dice.idxmax(), "val_iou"]), 4),
+        "training_minutes": round((time.time() - start) / 60, 1),
+        "note": "Validation metrics only. Held-out test results are produced by ml/evaluate.py.",
+    }
+    (OUT / "training_summary.json").write_text(json.dumps(summary, indent=2))
+    print(json.dumps(summary, indent=2))
 
-    best_validation_dice = -1.0
-
-    history = []
-
-    print("\nStarting training...\n")
-
-    # Training loop
-    for epoch in range(1, EPOCHS + 1):
-
-        print("\n" + "-" * 58)
-
-        print(f"Starting epoch {epoch}/{EPOCHS}")
-
-        print("-" * 58)
-
-        # Training
-        train_loss, train_dice = run_epoch(
-            model=model,
-            loader=training_loader,
-            optimizer=optimizer,
-            device=device,
-            training=True,
-            epoch=epoch,
-            total_epochs=EPOCHS
-        )
-
-        # Validation
-        val_loss, val_dice = run_epoch(
-            model=model,
-            loader=validation_loader,
-            optimizer=optimizer,
-            device=device,
-            training=False,
-            epoch=epoch,
-            total_epochs=EPOCHS
-        )
-
-        print("\nEpoch summary")
-
-        print(f"Training loss:     {train_loss:.4f}")
-
-        print(f"Training Dice:     {train_dice:.4f}")
-
-        print(f"Validation loss:   {val_loss:.4f}")
-
-        print(f"Validation Dice:   {val_dice:.4f}")
-
-        history.append({
-
-            "epoch": epoch,
-
-            "train_loss": train_loss,
-
-            "train_dice": train_dice,
-
-            "validation_loss": val_loss,
-
-            "validation_dice": val_dice
-
-        })
-
-        # Save best model
-        if val_dice > best_validation_dice:
-
-            best_validation_dice = val_dice
-
-            save_checkpoint(
-                model=model,
-                epoch=epoch,
-                validation_dice=best_validation_dice
-            )
-
-        # Save training history
-        pd.DataFrame(history).to_csv(
-            HISTORY_PATH,
-            index=False
-        )
-
-        # Save evaluation metrics
-        metrics = {
-
-            "architecture": "HC18 U-Net",
-
-            "dataset": "HC18",
-
-            "image_size": IMAGE_SIZE,
-
-            "batch_size": BATCH_SIZE,
-
-            "epochs_completed": epoch,
-
-            "best_validation_dice": best_validation_dice,
-
-            "latest_train_loss": train_loss,
-
-            "latest_train_dice": train_dice,
-
-            "latest_validation_loss": val_loss,
-
-            "latest_validation_dice": val_dice,
-
-            "training_samples": training_count,
-
-            "validation_samples": validation_count,
-
-            "device": str(device),
-
-            "split_strategy": "random_image_level",
-
-            "clinical_validity": (
-                "Not established. Research prototype only."
-            )
-        }
-
-        METRICS_PATH.write_text(
-            json.dumps(metrics, indent=4),
-            encoding="utf-8"
-        )
-
-        gc.collect()
-
-        if device.type == "cuda":
-
-            torch.cuda.empty_cache()
-
-    # Final results
-    print("\n" + "=" * 58)
-
-    print("             TRAINING FINISHED")
-
-    print("=" * 58)
-
-    print(
-        f"Best validation Dice: "
-        f"{best_validation_dice:.4f}"
-    )
-
-    print("Best model:", CHECKPOINT_PATH)
-
-    print("Training history:", HISTORY_PATH)
-
-    print("Metrics:", METRICS_PATH)
-
-    print(
-        "\nThis is an academic research prototype. "
-        "It is not clinically validated and must not be used "
-        "for diagnosis or pregnancy-care decisions."
-    )
-
-
-# ============================================================
-# 11. SCRIPT ENTRY POINT
-# ============================================================
 
 if __name__ == "__main__":
-
     main()
