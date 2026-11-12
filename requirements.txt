@@ -1,9 +1,16 @@
-streamlit>=1.36
-torch>=2.2
-torchvision>=0.17
-numpy>=1.26
+# Runtime dependencies (ML pipeline + FastAPI backend).
+# GPU: install PyTorch with CUDA first, e.g.
+#   pip install torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cu121
+torch>=2.5,<2.6
+torchvision>=0.20,<0.21
+numpy>=1.26,<2.0
 pandas>=2.1
-Pillow>=10.0
+pillow>=10.0
 opencv-python-headless>=4.9
-reportlab>=4.1
-scikit-learn>=1.4
+matplotlib>=3.8
+
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic>=2.7
+pydantic-settings>=2.3
+python-multipart>=0.0.9
