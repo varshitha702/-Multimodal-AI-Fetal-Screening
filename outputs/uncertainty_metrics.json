@@ -62,6 +62,6 @@
       "single_pass_ms": 788.4,
       "tta_ms": 5591.3
     },
-    "note": "per image, 800x540, laptop (RTX 4050 / CPU), model only (no HTTP, no PNG encoding). CPU measured in a fresh CPU-only process over a short burst: under sustained load this laptop throttles the process and both numbers grow ~8x."
+    "note": "per image, 800x540, laptop (RTX 4050 / CPU), model only (no HTTP, no PNG encoding). CPU measured in a fresh CPU-only process, but this laptop throttles a background process after a few seconds of load, so the CPU numbers are pessimistic: in un-throttled bursts a single pass took 71-90 ms and TTA ~630 ms."
   }
 }

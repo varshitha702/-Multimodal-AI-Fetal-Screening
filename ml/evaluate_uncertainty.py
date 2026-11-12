@@ -152,8 +152,8 @@ def main() -> None:
         metrics["latency"]["cpu"] = cpu_latency(test.filename.head(3).tolist())
     metrics["latency"]["note"] = (
         "per image, 800x540, laptop (RTX 4050 / CPU), model only (no HTTP, no PNG encoding). CPU measured in a "
-        "fresh CPU-only process over a short burst: under sustained load this laptop throttles the process and "
-        "both numbers grow ~8x.")
+        "fresh CPU-only process, but this laptop throttles a background process after a few seconds of load, so "
+        "the CPU numbers are pessimistic: in un-throttled bursts a single pass took 71-90 ms and TTA ~630 ms.")
     (OUT / "uncertainty_metrics.json").write_text(json.dumps(metrics, indent=2))
     print(json.dumps(calibration, indent=2))
     print(json.dumps(metrics, indent=2))
