@@ -12,11 +12,15 @@ import pandas as pd
 import streamlit as st
 import torch
 from PIL import Image
-from model import UNet
+import sys
 
-BASE_DIR = Path(__file__).resolve().parent
+APP_DIR = Path(__file__).resolve().parent
+BASE_DIR = APP_DIR.parent  # repository root
+sys.path.insert(0, str(BASE_DIR))
+from ml.model import UNet  # noqa: E402
+
 DATA_ROOT = BASE_DIR / "data" / "raw" / "HC18"
-IMAGE_DIR = DATA_ROOT / "training_set" / "training_set"
+IMAGE_DIR = DATA_ROOT / "training_set"
 CSV_PATH = DATA_ROOT / "training_set_pixel_size_and_HC.csv"
 CHECKPOINT = BASE_DIR / "outputs" / "hc18_unet_best.pth"
 METRICS_PATH = BASE_DIR / "outputs" / "hc18_metrics.json"
@@ -31,7 +35,7 @@ st.set_page_config(
 )
 
 def load_css():
-    css = BASE_DIR / "assets" / "style.css"
+    css = APP_DIR / "assets" / "style.css"
     if css.exists():
         st.markdown(f"<style>{css.read_text(encoding='utf-8')}</style>", unsafe_allow_html=True)
 
@@ -97,8 +101,8 @@ def contour_perimeter(mask, spacing_mm):
     return float(cv2.arcLength(scaled.reshape(-1, 1, 2), True))
 
 def dataset_audit():
-    images = list(IMAGE_DIR.glob("*_HC.png")) if IMAGE_DIR.exists() else []
-    masks = list(IMAGE_DIR.glob("*_HC_Annotation.png")) if IMAGE_DIR.exists() else []
+    images = list(IMAGE_DIR.glob("*HC.png")) if IMAGE_DIR.exists() else []
+    masks = list(IMAGE_DIR.glob("*HC_Annotation.png")) if IMAGE_DIR.exists() else []
     image_ids = {p.stem.removesuffix("_HC") for p in images}
     mask_ids = {p.stem.removesuffix("_HC_Annotation") for p in masks}
     csv_ok = CSV_PATH.exists()
@@ -342,7 +346,7 @@ elif page == "Dataset & training":
     d2.metric("Masks without images", audit["masks_without_images"])
     d3.metric("Metadata CSV", "Found" if audit["csv_exists"] else "Missing")
     st.markdown("### Expected directory layout")
-    st.code("data/raw/HC18/\n├── training_set/\n│   └── training_set/\n│       ├── *_HC.png\n│       └── *_HC_Annotation.png\n└── training_set_pixel_size_and_HC.csv", language="text")
+    st.code("data/raw/HC18/\n├── training_set/\n│   ├── *HC.png\n│   └── *HC_Annotation.png\n└── training_set_pixel_size_and_HC.csv", language="text")
     if audit["csv_exists"]:
         st.caption(f"CSV rows: {audit['csv_rows']} · Columns: {', '.join(audit['csv_columns'])}")
     if not IMAGE_DIR.exists():
@@ -351,13 +355,13 @@ elif page == "Dataset & training":
         st.rerun()
     st.markdown("### Training")
     st.write("Run the existing HC18 training script from the project root after verifying the dataset:")
-    st.code("python check_hc18.py\npython train_hc18.py", language="powershell")
+    st.code("python scripts/check_hc18.py\npython -m ml.train", language="powershell")
     st.warning("The supplied trainer uses a random image-level train/validation split. For stronger research claims, use a documented patient/study-level split where dataset metadata supports it. No training is started from this dashboard.")
 
 elif page == "Model information":
     st.markdown('<div class="eyebrow">MODEL CARD</div>', unsafe_allow_html=True)
     st.title("HC18 U-Net segmentation model")
-    st.write("The active model is the convolutional U-Net defined in `model.py` and trained by `train_hc18.py`.")
+    st.write("The active model is the convolutional U-Net defined in `ml/model.py` and trained by `ml/train.py`.")
     left, right = st.columns(2)
     with left:
         st.markdown("**Architecture**")
@@ -378,8 +382,6 @@ elif page == "Model information":
             st.warning("Metrics file exists but could not be parsed.")
     else:
         st.info("No evaluation metrics JSON is present. The supplied HC18 training script reports validation Dice in the terminal but does not currently save a metrics JSON.")
-    st.markdown("### Separate multimodal experiment")
-    st.warning("The uploaded `train.py` and `config.py` describe an ultrasound + ECG classification experiment. It is not connected to this application: the required `MultimodalFetalModel` implementation, paired dataset manifest, ECG inputs and checkpoint were not included in the supplied files.")
 
 else:
     st.markdown('<div class="eyebrow">PROJECT DOCUMENTATION</div>', unsafe_allow_html=True)

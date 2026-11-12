@@ -17,14 +17,14 @@ from torch.utils.data import DataLoader, Dataset, Subset
 
 from ml.masks import annotation_to_mask
 from ml.metrics import dice_per_sample
-from model import UNet
+from ml.model import UNet
 
 
 # ============================================================
 # 1. PROJECT PATHS
 # ============================================================
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]
 
 DATA_ROOT = ROOT / "data" / "raw" / "HC18"
 IMAGE_DIR = DATA_ROOT / "training_set"

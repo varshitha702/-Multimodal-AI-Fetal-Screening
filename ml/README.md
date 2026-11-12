@@ -1,0 +1,10 @@
+# ml/ — data pipeline, model, training and evaluation
+
+Owners: Pujari Varshitha (dataset and preprocessing), Nachiketha K G (training and evaluation).
+
+| Module | Purpose |
+|---|---|
+| `masks.py` | HC18 outline annotation -> filled mask (fill at original resolution, then resize) |
+| `metrics.py` | Dice / IoU that never score empty-vs-empty as perfect; soft Dice loss |
+| `model.py` | U-Net architecture |
+| `train.py` | Training entry point: `python -m ml.train` (run from the repository root) |

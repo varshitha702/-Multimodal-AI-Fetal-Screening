@@ -2,9 +2,9 @@
 from pathlib import Path
 import pandas as pd
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]
 DATA_ROOT = ROOT / "data" / "raw" / "HC18"
-IMAGE_DIR = DATA_ROOT / "training_set" / "training_set"
+IMAGE_DIR = DATA_ROOT / "training_set"
 CSV_FILE = DATA_ROOT / "training_set_pixel_size_and_HC.csv"
 
 print("\n--- HC18 DATASET CHECK ---")
