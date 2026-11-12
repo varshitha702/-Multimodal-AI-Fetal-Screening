@@ -1,0 +1,32 @@
+{
+  "seed": 42,
+  "unit": "examination group (filename prefix)",
+  "total_images": 999,
+  "total_groups": 806,
+  "splits": {
+    "train": {
+      "images": 696,
+      "groups": 565,
+      "image_fraction": 0.6967,
+      "hc_mm_mean": 175.34,
+      "hc_mm_min": 44.3,
+      "hc_mm_max": 346.4
+    },
+    "val": {
+      "images": 152,
+      "groups": 120,
+      "image_fraction": 0.1522,
+      "hc_mm_mean": 172.67,
+      "hc_mm_min": 56.81,
+      "hc_mm_max": 335.0
+    },
+    "test": {
+      "images": 151,
+      "groups": 121,
+      "image_fraction": 0.1512,
+      "hc_mm_mean": 171.72,
+      "hc_mm_min": 60.26,
+      "hc_mm_max": 323.3
+    }
+  }
+}
