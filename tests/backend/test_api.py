@@ -62,6 +62,8 @@ def png_bytes(w=320, h=240, mode="L", fmt="PNG") -> bytes:
 
 
 def post(client, data: bytes, content_type="image/png", name="scan.png", **form):
+    # TTA (8 passes) is on by default in the API; the contract tests switch it off for speed, T33-T38 test it.
+    form.setdefault("uncertainty", "false")
     return client.post("/api/v1/predict", files={"file": (name, data, content_type)},
                        data={k: str(v) for k, v in form.items()})
 
@@ -316,4 +318,57 @@ def test_T31_plane_check_endpoint(gate_warn_client, client):
 def test_T32_invalid_override_flag_rejected_422(client):
     r = client.post("/api/v1/predict", files={"file": ("a.png", png_bytes(), "image/png")},
                     data={"override_plane_check": "maybe"})
+    assert r.status_code == 422
+
+
+# --- test-time-augmentation uncertainty (Feature B) -------------------------------------------------
+
+def test_T33_default_predict_includes_tta_uncertainty(client):
+    r = client.post("/api/v1/predict", files={"file": ("a.png", png_bytes(), "image/png")},
+                    data={"pixel_size_mm": "0.2"})
+    body = r.json()
+    u = body["uncertainty"]
+    assert r.status_code == 200 and u["n_passes"] == 8 and len(u["hc_passes_mm"]) == 8
+    assert 0 <= u["disagreement_fraction"] <= 1 and u["tta_ms"] > 0
+    assert set(u["thresholds"]) == {"hc_cv_percent", "disagreement_fraction"}   # committed calibration file
+    assert Image.open(io.BytesIO(base64.b64decode(body["uncertainty_png_base64"]))).size == (320, 240)
+    if u["hc_sd_mm"] is not None:
+        assert u["hc_sd_mm"] >= 0 and u["hc_mean_mm"] > 0
+
+
+def test_T34_uncertainty_false_skips_tta(client):
+    body = post(client, png_bytes(), pixel_size_mm=0.2, uncertainty="false").json()
+    assert body["uncertainty"] is None and body["uncertainty_png_base64"] is None
+
+
+def test_T35_low_reliability_flag_and_quality_message(checkpoint):
+    with make_client(checkpoint) as c:
+        c.app.state.model_service.uncertainty_calibration = {
+            "thresholds": {"hc_cv_percent": -1.0, "disagreement_fraction": -1.0}}   # everything is "unreliable"
+        body = post(c, png_bytes(), pixel_size_mm=0.2, uncertainty="true").json()
+    u = body["uncertainty"]
+    assert u["low_reliability"] is True and u["reasons"]
+    assert body["quality"]["flags"][0].startswith("Low reliability, re-scan recommended")
+
+
+def test_T36_no_calibration_means_no_flag(checkpoint):
+    with make_client(checkpoint) as c:
+        c.app.state.model_service.uncertainty_calibration = None
+        u = post(c, png_bytes(), pixel_size_mm=0.2, uncertainty="true").json()["uncertainty"]
+    assert u["low_reliability"] is False and u["thresholds"] is None
+
+
+def test_T37_withheld_measurement_hides_tta_hc(gate_warn_client):
+    body = post(gate_warn_client, png_bytes(), pixel_size_mm=0.2, uncertainty="true").json()
+    u = body["uncertainty"]
+    assert body["measurement_withheld"] is True
+    assert u["hc_mean_mm"] is None and u["hc_sd_mm"] is None and u["hc_passes_mm"] == []
+    assert u["disagreement_fraction"] is not None
+
+
+def test_T38_model_info_uncertainty_and_bad_flag(client):
+    info = client.get("/api/v1/model-info").json()["uncertainty"]
+    assert info["n_passes"] == 8 and info["primary_hc"] in ("single", "tta_mean")
+    r = client.post("/api/v1/predict", files={"file": ("a.png", png_bytes(), "image/png")},
+                    data={"uncertainty": "sometimes"})
     assert r.status_code == 422

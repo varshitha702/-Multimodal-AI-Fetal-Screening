@@ -32,6 +32,8 @@ class ModelInfo(BaseModel):
     intended_use: str
     plane_classifier: dict | None = Field(
         default=None, description="Standard-plane gate: checkpoint details and official-test metrics, if loaded")
+    uncertainty: dict | None = Field(
+        default=None, description="TTA reliability thresholds (validation) and held-out test evaluation, if available")
     disclaimer: str = DISCLAIMER
 
 
@@ -71,6 +73,21 @@ class PlaneCheck(BaseModel):
     overridden: bool = Field(default=False, description="Measurement was forced despite a warning")
     message: str
     model_version: str | None = None
+
+
+class Uncertainty(BaseModel):
+    """Test-time augmentation: N augmented passes, each transform undone before combining."""
+
+    n_passes: int
+    hc_mean_mm: float | None = Field(description="Mean HC over the passes (mm); null without pixel spacing")
+    hc_sd_mm: float | None = Field(description="SD of HC over the passes (mm); reported as HC +- SD")
+    hc_cv_percent: float | None = Field(description="SD / mean x 100")
+    hc_passes_mm: list[float | None] = Field(default_factory=list, description="HC of each pass (mm)")
+    disagreement_fraction: float = Field(description="Pixels where the pass masks disagree / their union")
+    low_reliability: bool = Field(description="True if CV or disagreement exceeds its validation-chosen threshold")
+    reasons: list[str] = Field(default_factory=list)
+    thresholds: dict[str, float] | None = Field(default=None, description="From outputs/uncertainty_calibration.json")
+    tta_ms: float
 
 
 class GrowthAssessment(BaseModel):
@@ -117,6 +134,10 @@ class PredictionResponse(BaseModel):
     quality: Quality
     growth: GrowthAssessment | None = Field(
         default=None, description="Only when gestational_age_weeks was given and HC could be measured")
+    uncertainty: Uncertainty | None = Field(
+        default=None, description="Test-time-augmentation uncertainty; null when uncertainty=false")
+    uncertainty_png_base64: str | None = Field(
+        default=None, description="Per-pixel uncertainty (SD of the pass probabilities) as a heat-map overlay, PNG")
     mask_png_base64: str = Field(description="Binary mask, PNG, original resolution, base64")
     overlay_png_base64: str = Field(description="Image with mask and fitted ellipse drawn, PNG, base64")
     inference_ms: float

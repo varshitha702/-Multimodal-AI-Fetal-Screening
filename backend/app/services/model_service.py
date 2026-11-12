@@ -18,15 +18,18 @@ from backend.app.schemas.prediction import (
     PlaneCheck,
     PredictionResponse,
     Quality,
+    Uncertainty,
 )
 from backend.app.services.image_service import png_base64
 from ml import intergrowth
 from ml.inference import Prediction, Segmenter
 from ml.planes import PlaneClassifier, PlaneResult
+from ml.uncertainty import load_calibration, reliability_reasons, tta_predict, uncertainty_overlay
 
 log = logging.getLogger("fetalai.model")
 TEST_METRICS_PATH = REPO_ROOT / "outputs" / "test_metrics.json"
 PLANE_METRICS_PATH = REPO_ROOT / "outputs" / "plane_metrics.json"
+UNCERTAINTY_METRICS_PATH = REPO_ROOT / "outputs" / "uncertainty_metrics.json"
 RE_ACQUIRE = "HC is defined on the trans-thalamic plane; please re-acquire."
 
 # Quality-flag thresholds (heuristics for user feedback, not clinical criteria)
@@ -43,6 +46,7 @@ class ModelService:
         self.load_error: str | None = None
         self.planes: PlaneClassifier | None = None
         self.plane_load_error: str | None = None
+        self.uncertainty_calibration: dict | None = None
 
     @property
     def ready(self) -> bool:
@@ -62,6 +66,9 @@ class ModelService:
             self.load_error = f"{type(exc).__name__}: {exc}"
             log.exception("model not loaded")
         self._load_planes()
+        self.uncertainty_calibration = load_calibration()
+        if self.uncertainty_calibration is None:
+            log.warning("no uncertainty calibration; the low-reliability flag is disabled")
 
     def _load_planes(self) -> None:
         """The plane gate is optional: without it /predict still measures and says the check was unavailable."""
@@ -94,7 +101,20 @@ class ModelService:
             intended_use="Fetal head segmentation and head-circumference measurement on 2-D ultrasound "
                          "trans-thalamic plane images, for research and teaching only.",
             plane_classifier=self._plane_info(),
+            uncertainty=self._uncertainty_info(),
         )
+
+    def _uncertainty_info(self) -> dict | None:
+        cal = self.uncertainty_calibration
+        if cal is None:
+            return None
+        info = {"n_passes": len(cal["transforms"]), "transforms": cal["transforms"], "thresholds": cal["thresholds"],
+                "rule": cal["rule"], "primary_hc": cal["primary_hc"], "test_metrics": None}
+        if UNCERTAINTY_METRICS_PATH.is_file():
+            m = json.loads(UNCERTAINTY_METRICS_PATH.read_text())
+            info["test_metrics"] = {"n": m["n"], "spearman": m["spearman"], "flag": m["flag"],
+                                    "hc_mae_mm": m["hc_mae_mm"]}
+        return info
 
     def _plane_info(self) -> dict | None:
         if self.planes is None:
@@ -156,13 +176,17 @@ class ModelService:
         return msg
 
     def predict(self, gray: np.ndarray, pixel_size_mm: float | None,
-                gestational_age_weeks: float | None = None, override_plane_check: bool = False) -> PredictionResponse:
+                gestational_age_weeks: float | None = None, override_plane_check: bool = False,
+                uncertainty: bool = True) -> PredictionResponse:
         t0 = time.perf_counter()
         plane = self.plane_check(gray, override_plane_check)
         withheld = plane.status == "warn" and not override_plane_check
         pred = self.segmenter.predict(gray, pixel_size_mm)
         if withheld:  # still segment (to show the outline) but do not report a measurement on the wrong plane
             pred.hc_mm = None
+        unc, unc_png = None, None
+        if uncertainty:
+            unc, unc_png = self._uncertainty(gray, pixel_size_mm, withheld)
         elapsed_ms = (time.perf_counter() - t0) * 1000
         h, w = gray.shape
         area_px = int(pred.mask.sum())
@@ -177,6 +201,8 @@ class ModelService:
                 semi_minor_mm=round(e.semi_minor * pixel_size_mm, 2) if pixel_size_mm and not withheld else None,
             )
         quality = self._quality(pred, pixel_size_mm, gestational_age_weeks)
+        if unc is not None and unc.low_reliability:
+            quality.flags.insert(0, "Low reliability, re-scan recommended: " + " ".join(unc.reasons))
         if withheld:
             quality.flags.insert(0, "Measurement withheld: the plane check did not confirm a trans-thalamic plane. "
                                     "Resend with override_plane_check=true to measure anyway.")
@@ -190,6 +216,8 @@ class ModelService:
             head_area_px=area_px,
             ellipse=ellipse,
             quality=quality,
+            uncertainty=unc,
+            uncertainty_png_base64=unc_png,
             growth=self._growth(pred.hc_mm, gestational_age_weeks),
             mask_png_base64=png_base64((pred.mask * 255).astype(np.uint8)),
             overlay_png_base64=png_base64(self._overlay(gray, pred)),
@@ -200,6 +228,26 @@ class ModelService:
                                       "plane_status": plane.status, "withheld": withheld,
                                       "hc_mm": response.head_circumference_mm, "ms": response.inference_ms})
         return response
+
+    def _uncertainty(self, gray: np.ndarray, pixel_size_mm: float | None,
+                     withheld: bool) -> tuple[Uncertainty, str]:
+        t0 = time.perf_counter()
+        r = tta_predict(self.segmenter, gray, pixel_size_mm)
+        cal = self.uncertainty_calibration
+        reasons = reliability_reasons(r, cal)
+
+        def mm(v: float | None) -> float | None:
+            return None if (v is None or withheld) else round(v, 2)
+
+        u = Uncertainty(
+            n_passes=r.n_passes, hc_mean_mm=mm(r.hc_mean_mm), hc_sd_mm=mm(r.hc_sd_mm),
+            hc_cv_percent=None if (r.hc_cv_percent is None or withheld) else round(r.hc_cv_percent, 3),
+            hc_passes_mm=[] if withheld else [mm(v) for v in r.hc_passes_mm],
+            disagreement_fraction=round(r.disagreement_fraction, 4), low_reliability=bool(reasons), reasons=reasons,
+            thresholds=None if cal is None else cal["thresholds"],
+            tta_ms=round((time.perf_counter() - t0) * 1000, 1),
+        )
+        return u, png_base64(uncertainty_overlay(gray, r.std_map))
 
     @staticmethod
     def _growth(hc_mm: float | None, ga_weeks: float | None) -> GrowthAssessment | None:

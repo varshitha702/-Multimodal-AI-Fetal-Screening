@@ -60,11 +60,15 @@ async def predict(
     override_plane_check: Annotated[bool, Form(
         description="Measure even if the plane check does not confirm a trans-thalamic plane "
                     "(the warning is still returned).")] = False,
+    uncertainty: Annotated[bool, Form(
+        description="Run test-time augmentation (8 passes) for HC +- SD, an uncertainty map and the "
+                    "low-reliability flag. Set false for a faster single-pass result.")] = True,
 ) -> PredictionResponse:
     """Check the scan plane, then segment the fetal head, fit an ellipse and measure head circumference.
 
     Steps: check type -> read with size limit -> verify and decode -> **plane check** (FETAL_PLANES_DB classifier)
-    -> U-Net -> ellipse fit -> HC -> (optional) INTERGROWTH-21st centile for the given gestational age.
+    -> U-Net -> ellipse fit -> HC -> (optional) INTERGROWTH-21st centile for the given gestational age
+    -> (default) test-time-augmentation uncertainty: HC +- SD, uncertainty map, low-reliability flag.
     If the plane check warns and ``override_plane_check`` is false, HC / area / centile are withheld
     (``measurement_withheld: true``) and ``plane_check.message`` explains why.
     """
@@ -73,7 +77,7 @@ async def predict(
     gray = image_service.decode_grayscale(data, settings)
     # Inference is CPU/GPU bound; run it in a worker thread so the event loop stays responsive.
     return await run_in_threadpool(service.predict, gray, pixel_size_mm, gestational_age_weeks,
-                                   override_plane_check)
+                                   override_plane_check, uncertainty)
 
 
 @router.post("/plane-check", response_model=PlaneCheck, tags=["model"],
