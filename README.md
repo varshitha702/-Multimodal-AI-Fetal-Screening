@@ -5,7 +5,8 @@
 B.Tech Major Project, REVA University. FetalAI first **checks that the ultrasound image is the standard
 trans-thalamic plane** (a calibrated plane classifier), then segments the fetal head with a U-Net, fits an
 ellipse to it and reports the **head circumference (HC) in millimetres**, through a FastAPI backend and a
-Next.js web app.
+Next.js web app. Each HC comes with an **uncertainty (HC ± SD) from test-time augmentation** and a
+"low reliability, re-scan" flag.
 
 > **Academic research prototype, not a medical device.** It is not clinically validated and must not be used
 > for diagnosis, reassurance, triage or pregnancy-care decisions.
@@ -34,12 +35,24 @@ training and test. Details and limitations: [`docs/MODEL_CARD.md`](docs/MODEL_CA
 | Trans-thalamic images accepted / non-brain images rejected | **95.7 %** / **99.8 %** |
 | HC18 images accepted (domain shift, early gestation) | 60.3 % (override available) |
 
+### Measurement uncertainty (test-time augmentation, HC18 held-out test split, n = 151)
+
+| Metric | Value |
+|---|---|
+| Spearman ρ between TTA HC SD and the actual HC error | **0.27** (95 % CI 0.11–0.41, p < 0.001): modest |
+| Flagged "low reliability" (validation-chosen thresholds) | 11 % of images |
+| MAE of flagged vs unflagged images | **3.68 mm vs 1.99 mm** |
+| Extra latency (Docker CPU backend) | about +0.8 s per request (`uncertainty=false` to skip) |
+
 ## Features
 
 * **Standard-plane quality gate** (Feature A): an EfficientNet-B0 with a plane head and a brain sub-plane head,
   trained on FETAL_PLANES_DB with a patient-level split and temperature-scaled. If the image is not a confirmed
   trans-thalamic plane, the API withholds HC and says why ("please re-acquire"); an explicit override
   measures anyway. The UI shows a PASS / WARN badge before the result.
+* **Measurement uncertainty** (Feature B): 8 test-time-augmented passes (flip, zoom, gamma), each undone before
+  combining, give HC ± SD, a per-pixel uncertainty map (overlay toggle in the UI) and a "low reliability,
+  re-scan" flag with thresholds chosen on the validation split.
 * **Segmentation + measurement:** U-Net → largest component → ellipse fit → Ramanujan perimeter × pixel spacing.
 * **REST API** (FastAPI): `/api/v1/health`, `/api/v1/model-info`, `/api/v1/predict`, `/api/v1/plane-check`;
   validation with clear 400/413/415/422/503 errors; OpenAPI docs at `/docs`.
@@ -50,7 +63,7 @@ training and test. Details and limitations: [`docs/MODEL_CARD.md`](docs/MODEL_CA
   (Papageorghiou et al., *Lancet* 2014), verified against every cell of the official published table, with a
   centile chart. A comparison with a population standard, not a diagnosis.
 * **Research dashboard** (Streamlit) using the same inference code.
-* **Reproducible pipeline:** fixed-seed splits, GPU training, evaluation scripts, 114 automated tests, CI.
+* **Reproducible pipeline:** fixed-seed splits, GPU training, evaluation scripts, 137 automated tests, CI.
 
 ## Architecture
 
@@ -91,6 +104,9 @@ python -m ml.evaluate
 python -m ml.train_planes --size 320 --batch-size 32
 python -m ml.evaluate_planes
 
+# 3c. TTA uncertainty: thresholds on validation, evaluation on test (writes outputs/uncertainty_*.json)
+python -m ml.evaluate_uncertainty
+
 # 4. Backend on http://localhost:8000 (docs at /docs)
 scripts\run_backend.bat
 
@@ -124,6 +140,8 @@ check as unavailable.
 | Plane check: PASS | ![](docs/screenshots/ui_plane_check_pass.png) |
 | Plane check: WARN (femur image, HC withheld) | ![](docs/screenshots/ui_plane_check_warn.png) |
 | Plane check: overridden | ![](docs/screenshots/ui_plane_check_override.png) |
+| Low reliability, re-scan (uncertainty map) | ![](docs/screenshots/ui_low_reliability.png) |
+| TTA SD vs actual HC error | ![](docs/screenshots/uncertainty_vs_error.png) |
 | Plane classifier confusion matrices | ![](docs/screenshots/plane_confusion.png) |
 | Calibration before / after | ![](docs/screenshots/plane_reliability.png) |
 | Results (dark) | ![](docs/screenshots/ui_results_dark.png) |
