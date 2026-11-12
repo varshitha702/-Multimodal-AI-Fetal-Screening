@@ -20,7 +20,7 @@
 | Item | Status | Evidence |
 |---|---|---|
 | **A. Standard-plane quality gate** (FETAL_PLANES_DB, two-head EfficientNet-B0, temperature scaling, gate in `/predict`, UI badge, override) | Done | `docs/MODEL_CARD.md` (plane acc 94.0 %, ECE 0.014, TT accepted 95.7 %, HC18 accepted 60.3 %), ADR-0006 |
-| B. Measurement uncertainty (test-time augmentation) | In progress | |
+| **B. Measurement uncertainty** (8-pass test-time augmentation, HC ± SD, uncertainty map, validation-chosen low-reliability flag) | Done | `docs/MODEL_CARD.md` addendum (Spearman ρ 0.27, flagged MAE 3.68 vs 1.99 mm), ADR-0007 |
 | C. CTG branch + rule-based screening summary | Planned | |
 
 
@@ -31,8 +31,8 @@
    within-plane quality scoring (landmarks, symmetry).
 2. **CTG (cardiotocography) branch** with confidence-aware decision-level fusion with the ultrasound branch
    (the "multimodal" part of the project title).
-3. **Uncertainty and calibration.** Test-time augmentation and/or MC dropout; calibrate the confidence shown
-   to users; replace the heuristic quality flags with calibrated ones.
+3. **Better uncertainty.** TTA is done (modest correlation with error, ρ 0.27); next: MC dropout or deep
+   ensembles, and calibrating the SD into a prediction interval on paired local data.
 4. **Stronger model and validation.** Pretrained-encoder U-Net (e.g. ResNet/EfficientNet encoder), k-fold
    cross-validation, external validation on another dataset.
 5. **Gestational-age estimation from HC** (the reverse direction; HC-for-GA centiles are already done).
