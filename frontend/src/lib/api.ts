@@ -8,7 +8,23 @@ export const ACCEPTED_TYPES = ["image/png", "image/jpeg"];
 export interface Health {
   status: "ok" | "degraded";
   model_loaded: boolean;
+  plane_model_loaded: boolean;
   version: string;
+}
+
+export interface PlaneCheck {
+  status: "pass" | "warn" | "unavailable";
+  plane: string | null;
+  plane_confidence: number | null;
+  brain_subplane: string | null;
+  brain_subplane_confidence: number | null;
+  tt_probability: number | null;
+  threshold: number | null;
+  plane_probabilities: Record<string, number>;
+  subplane_probabilities: Record<string, number>;
+  overridden: boolean;
+  message: string;
+  model_version: string | null;
 }
 
 export interface Ellipse {
@@ -60,6 +76,8 @@ export interface Prediction {
   image_width: number;
   image_height: number;
   pixel_size_mm: number | null;
+  plane_check: PlaneCheck;
+  measurement_withheld: boolean;
   head_detected: boolean;
   head_circumference_mm: number | null;
   head_area_mm2: number | null;
@@ -84,6 +102,7 @@ export interface ModelInfo {
   test_metrics: Record<string, unknown> | null;
   training_data: string;
   intended_use: string;
+  plane_classifier: Record<string, unknown> | null;
   disclaimer: string;
 }
 
@@ -130,11 +149,18 @@ export const getModelInfo = () => request<ModelInfo>("/api/v1/model-info");
 
 export const getCentileCurves = () => request<CentileCurves>("/api/v1/reference/hc-centiles");
 
-export function predict(file: File, pixelSizeMm: number | null, gaWeeks: number | null, signal?: AbortSignal) {
+export function predict(
+  file: File,
+  pixelSizeMm: number | null,
+  gaWeeks: number | null,
+  signal?: AbortSignal,
+  overridePlaneCheck = false,
+) {
   const form = new FormData();
   form.append("file", file);
   if (pixelSizeMm !== null) form.append("pixel_size_mm", String(pixelSizeMm));
   if (gaWeeks !== null) form.append("gestational_age_weeks", String(gaWeeks));
+  if (overridePlaneCheck) form.append("override_plane_check", "true");
   return request<Prediction>("/api/v1/predict", { method: "POST", body: form, signal });
 }
 

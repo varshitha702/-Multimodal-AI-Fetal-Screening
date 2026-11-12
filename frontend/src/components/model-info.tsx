@@ -27,6 +27,83 @@ interface TestMetrics {
   ellipse_fit_failures: number;
 }
 
+interface PlaneMetrics {
+  plane_accuracy: number;
+  plane_macro_f1: number;
+  subplane_accuracy: number;
+  subplane_macro_f1: number;
+  plane_ece_before: number;
+  plane_ece_after: number;
+  gate: { threshold: number; tt_acceptance_rate: number; non_tt_rejection_rate: number };
+  hc18_acceptance: { n: number; acceptance_rate: number };
+}
+
+interface PlaneInfo {
+  architecture: string;
+  checkpoint_epoch: number;
+  tt_threshold: number;
+  threshold_rule: string;
+  training_data: string;
+  test_metrics: PlaneMetrics | null;
+}
+
+const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
+
+function PlaneGateSection({ p }: { p: PlaneInfo | null }) {
+  if (!p)
+    return (
+      <Alert>
+        <AlertTitle>Plane gate not loaded</AlertTitle>
+        <AlertDescription>
+          Train it with <code>python -m ml.train_planes</code>; until then every result says the plane check was
+          unavailable.
+        </AlertDescription>
+      </Alert>
+    );
+  const m = p.test_metrics;
+  return (
+    <Card data-testid="plane-gate-info">
+      <CardHeader>
+        <CardTitle className="text-base">Standard-plane quality gate</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {m && (
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <MetricCard
+              label="Plane accuracy"
+              value={pct(m.plane_accuracy)}
+              hint={`macro-F1 ${m.plane_macro_f1.toFixed(3)} · 6 classes`}
+              highlight
+            />
+            <MetricCard
+              label="Brain sub-plane"
+              value={pct(m.subplane_accuracy)}
+              hint={`macro-F1 ${m.subplane_macro_f1.toFixed(3)} · TT/TC/TV/other`}
+            />
+            <MetricCard
+              label="Calibration (ECE)"
+              value={m.plane_ece_after.toFixed(3)}
+              hint={`before temperature scaling ${m.plane_ece_before.toFixed(3)}`}
+            />
+            <MetricCard
+              label="HC18 accepted"
+              value={pct(m.hc18_acceptance.acceptance_rate)}
+              hint={`of ${m.hc18_acceptance.n} images · TT test ${pct(m.gate.tt_acceptance_rate)}`}
+            />
+          </div>
+        )}
+        <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
+          <Row term="Architecture" value={p.architecture} />
+          <Row term="Checkpoint epoch" value={String(p.checkpoint_epoch)} />
+          <Row term="Pass threshold, P(trans-thalamic)" value={`${p.tt_threshold.toFixed(3)} (${p.threshold_rule})`} />
+          <Row term="Training data" value={p.training_data} />
+          {m && <Row term="Non-TT images rejected (official test)" value={pct(m.gate.non_tt_rejection_rate)} />}
+        </dl>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function ModelInfoView() {
   const [info, setInfo] = useState<ModelInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -116,13 +193,16 @@ export function ModelInfoView() {
         </CardContent>
       </Card>
 
+      <PlaneGateSection p={info.plane_classifier as PlaneInfo | null} />
+
       <Alert variant="warning">
         <AlertCircle className="size-4" />
         <AlertTitle>Limitations</AlertTitle>
         <AlertDescription>
-          Trained and tested on one public dataset only, with no external validation. It assumes a correct
-          trans-thalamic plane and does not check it. Small, early-gestation heads are the weakest case. The quality
-          indicators are heuristics, not calibrated uncertainty. {info.disclaimer}
+          The segmentation model was trained and tested on one public dataset only, with no external validation.
+          The plane gate was trained on a different public dataset (FETAL_PLANES_DB, two Barcelona hospitals), so it
+          can be less reliable on images from other machines. Small, early-gestation heads are the weakest case. The
+          segmentation quality indicators are heuristics, not calibrated uncertainty. {info.disclaimer}
         </AlertDescription>
       </Alert>
     </div>
