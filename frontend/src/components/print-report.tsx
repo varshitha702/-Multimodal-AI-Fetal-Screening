@@ -17,7 +17,22 @@ export function PrintReport({ result, originalUrl, fileName }: Props) {
       `${result.plane_check.status.toUpperCase()}${result.plane_check.overridden ? " (overridden)" : ""}: ${result.plane_check.message}`,
     ],
     ["Head detected", result.head_detected ? "yes" : "no"],
-    ["Head circumference", result.head_circumference_mm !== null ? `${result.head_circumference_mm.toFixed(1)} mm` : "—"],
+    [
+      "Head circumference",
+      result.head_circumference_mm !== null
+        ? `${result.head_circumference_mm.toFixed(1)} mm${result.uncertainty?.hc_sd_mm != null ? ` ± ${result.uncertainty.hc_sd_mm.toFixed(1)} mm (SD over ${result.uncertainty.n_passes} TTA passes)` : ""}`
+        : "—",
+    ],
+    ...(result.uncertainty
+      ? ([
+          [
+            "Reliability",
+            result.uncertainty.low_reliability
+              ? `LOW, re-scan recommended: ${result.uncertainty.reasons.join(" ")}`
+              : `OK (CV ${result.uncertainty.hc_cv_percent?.toFixed(2) ?? "—"}%, disagreement ${(result.uncertainty.disagreement_fraction * 100).toFixed(1)}%)`,
+          ],
+        ] as [string, string][])
+      : []),
     [
       "Ellipse diameters",
       e?.semi_major_mm ? `${(2 * e.semi_major_mm).toFixed(1)} × ${(2 * e.semi_minor_mm!).toFixed(1)} mm` : "—",

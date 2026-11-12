@@ -57,6 +57,19 @@ export interface Growth {
   reference: string;
 }
 
+export interface Uncertainty {
+  n_passes: number;
+  hc_mean_mm: number | null;
+  hc_sd_mm: number | null;
+  hc_cv_percent: number | null;
+  hc_passes_mm: (number | null)[];
+  disagreement_fraction: number;
+  low_reliability: boolean;
+  reasons: string[];
+  thresholds: { hc_cv_percent: number; disagreement_fraction: number } | null;
+  tta_ms: number;
+}
+
 export interface CentilePoint {
   ga_weeks: number;
   p3: number;
@@ -85,6 +98,8 @@ export interface Prediction {
   ellipse: Ellipse | null;
   quality: Quality;
   growth: Growth | null;
+  uncertainty: Uncertainty | null;
+  uncertainty_png_base64: string | null;
   mask_png_base64: string;
   overlay_png_base64: string;
   inference_ms: number;
@@ -103,6 +118,7 @@ export interface ModelInfo {
   training_data: string;
   intended_use: string;
   plane_classifier: Record<string, unknown> | null;
+  uncertainty: Record<string, unknown> | null;
   disclaimer: string;
 }
 

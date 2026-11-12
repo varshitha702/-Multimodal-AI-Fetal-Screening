@@ -104,6 +104,64 @@ function PlaneGateSection({ p }: { p: PlaneInfo | null }) {
   );
 }
 
+interface Corr {
+  rho: number;
+  ci95: [number, number];
+  p_value: number;
+  n: number;
+}
+
+interface UncertaintyInfo {
+  n_passes: number;
+  thresholds: { hc_cv_percent: number; disagreement_fraction: number };
+  rule: string;
+  primary_hc: string;
+  test_metrics: {
+    n: number;
+    spearman: { sd_mm_vs_abs_error_mm: Corr; cv_percent_vs_abs_error_percent: Corr };
+    flag: { flagged: number; flagged_rate: number; mae_flagged_mm: number; mae_unflagged_mm: number };
+  } | null;
+}
+
+function UncertaintySection({ u }: { u: UncertaintyInfo | null }) {
+  if (!u) return null;
+  const m = u.test_metrics;
+  const s = m?.spearman.sd_mm_vs_abs_error_mm;
+  return (
+    <Card data-testid="uncertainty-info">
+      <CardHeader>
+        <CardTitle className="text-base">Measurement uncertainty (test-time augmentation)</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {m && s && (
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <MetricCard
+              label="SD vs actual error"
+              value={`ρ ${s.rho.toFixed(2)}`}
+              hint={`Spearman, 95% CI ${s.ci95[0].toFixed(2)}–${s.ci95[1].toFixed(2)} · n=${s.n}`}
+              highlight
+            />
+            <MetricCard label="Flagged on test" value={pct(m.flag.flagged_rate)} hint={`${m.flag.flagged} of ${m.n} images`} />
+            <MetricCard label="MAE, flagged" value={m.flag.mae_flagged_mm.toFixed(2)} unit="mm" hint="images flagged low reliability" />
+            <MetricCard label="MAE, not flagged" value={m.flag.mae_unflagged_mm.toFixed(2)} unit="mm" hint="images passing the check" />
+          </div>
+        )}
+        <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
+          <Row term="Passes" value={`${u.n_passes} (identity, flip, zoom 0.9/1.1, gamma 0.8/1.25, flip + zoom)`} />
+          <Row
+            term="Low-reliability thresholds"
+            value={`HC CV > ${u.thresholds.hc_cv_percent.toFixed(2)}% or disagreement > ${pct(u.thresholds.disagreement_fraction)} (${u.rule})`}
+          />
+          <Row term="Reported HC" value={u.primary_hc === "single" ? "single pass (lower validation MAE than the TTA mean); ± is the TTA SD" : "TTA mean"} />
+        </dl>
+        <p className="text-xs text-muted-foreground">
+          The SD correlates only modestly with the real error: a low SD does not guarantee an accurate HC.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function ModelInfoView() {
   const [info, setInfo] = useState<ModelInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -195,6 +253,8 @@ export function ModelInfoView() {
 
       <PlaneGateSection p={info.plane_classifier as PlaneInfo | null} />
 
+      <UncertaintySection u={info.uncertainty as UncertaintyInfo | null} />
+
       <Alert variant="warning">
         <AlertCircle className="size-4" />
         <AlertTitle>Limitations</AlertTitle>
@@ -204,7 +264,8 @@ export function ModelInfoView() {
           can be less reliable on images from other machines; it accepts only 60% of HC18 images and about a third of
           early-gestation ones (HC under 100 mm), so use the override when needed. Small, early-gestation heads are
           also the weakest case for segmentation. The
-          segmentation quality indicators are heuristics, not calibrated uncertainty. {info.disclaimer}
+          single-image quality indicators are heuristics; the TTA uncertainty is a measured but only modest predictor of
+          the real error. {info.disclaimer}
         </AlertDescription>
       </Alert>
     </div>
