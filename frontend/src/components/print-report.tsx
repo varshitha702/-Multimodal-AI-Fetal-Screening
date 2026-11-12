@@ -1,0 +1,67 @@
+import { dataUrl, type Prediction } from "@/lib/api";
+
+interface Props {
+  result: Prediction;
+  originalUrl: string;
+  fileName: string;
+}
+
+/** Report layout that is only visible when printing (Ctrl+P / "Print report" -> Save as PDF). */
+export function PrintReport({ result, originalUrl, fileName }: Props) {
+  const e = result.ellipse;
+  const rows: [string, string][] = [
+    ["Image", `${fileName} (${result.image_width} × ${result.image_height} px)`],
+    ["Pixel spacing", result.pixel_size_mm ? `${result.pixel_size_mm} mm/px` : "not provided"],
+    ["Head detected", result.head_detected ? "yes" : "no"],
+    ["Head circumference", result.head_circumference_mm !== null ? `${result.head_circumference_mm.toFixed(1)} mm` : "—"],
+    [
+      "Ellipse diameters",
+      e?.semi_major_mm ? `${(2 * e.semi_major_mm).toFixed(1)} × ${(2 * e.semi_minor_mm!).toFixed(1)} mm` : "—",
+    ],
+    ["Head area", result.head_area_mm2 !== null ? `${(result.head_area_mm2 / 100).toFixed(2)} cm²` : "—"],
+    ["Model confidence", `${(result.quality.mean_confidence * 100).toFixed(1)}%`],
+    ["Model version", result.model_version],
+  ];
+  return (
+    <article className="hidden text-black print:block" data-testid="print-report">
+      <header className="mb-4 flex items-end justify-between border-b-2 border-black pb-2">
+        <div>
+          <h1 className="text-2xl font-bold">FetalAI: head circumference report</h1>
+          <p className="text-sm">HC18 U-Net segmentation · research prototype</p>
+        </div>
+        <p className="text-sm">{new Date().toLocaleString()}</p>
+      </header>
+      <p className="mb-4 border border-black p-2 text-sm font-semibold">{result.disclaimer}</p>
+      <div className="mb-4 grid grid-cols-2 gap-4">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={originalUrl} alt="Original" className="w-full border" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={dataUrl(result.overlay_png_base64)} alt="Overlay" className="w-full border" />
+      </div>
+      <table className="mb-4 w-full border-collapse text-sm">
+        <tbody>
+          {rows.map(([k, v]) => (
+            <tr key={k} className="border-b">
+              <th className="w-1/3 py-1 pr-4 text-left font-semibold">{k}</th>
+              <td className="py-1">{v}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {result.quality.flags.length > 0 && (
+        <>
+          <h2 className="font-semibold">Quality warnings</h2>
+          <ul className="mb-4 list-disc pl-5 text-sm">
+            {result.quality.flags.map((f) => (
+              <li key={f}>{f}</li>
+            ))}
+          </ul>
+        </>
+      )}
+      <p className="text-xs">
+        Method: U-Net segmentation, ellipse fit, perimeter by Ramanujan&apos;s approximation × pixel spacing. Trained on
+        the HC18 dataset (van den Heuvel et al., PLoS ONE 2018).
+      </p>
+    </article>
+  );
+}
