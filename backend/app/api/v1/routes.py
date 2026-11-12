@@ -13,6 +13,7 @@ from backend.app.schemas.prediction import (
     ErrorResponse,
     HealthResponse,
     ModelInfo,
+    PlaneCheck,
     PredictionResponse,
 )
 from backend.app.services import image_service
@@ -35,7 +36,7 @@ def health(service: Annotated[ModelService, Depends(get_model_service)],
            settings: Annotated[Settings, Depends(get_settings_dep)]) -> HealthResponse:
     """Liveness and readiness: ``degraded`` means the API is up but the model is not loaded."""
     return HealthResponse(status="ok" if service.ready else "degraded", model_loaded=service.ready,
-                          version=settings.version)
+                          plane_model_loaded=service.planes is not None, version=settings.version)
 
 
 @router.get("/model-info", response_model=ModelInfo, tags=["model"], responses={503: ERRORS[503]})
@@ -56,17 +57,37 @@ async def predict(
         ge=intergrowth.GA_MIN_WEEKS, le=intergrowth.GA_MAX_WEEKS,
         description="Exact gestational age in weeks (14-40), e.g. 22.43 for 22+3. "
                     "If given (with pixel spacing), HC is compared with the INTERGROWTH-21st standard.")] = None,
+    override_plane_check: Annotated[bool, Form(
+        description="Measure even if the plane check does not confirm a trans-thalamic plane "
+                    "(the warning is still returned).")] = False,
 ) -> PredictionResponse:
-    """Segment the fetal head, fit an ellipse and measure head circumference.
+    """Check the scan plane, then segment the fetal head, fit an ellipse and measure head circumference.
 
-    Steps: check type -> read with size limit -> verify and decode -> U-Net -> ellipse fit -> HC
-    -> (optional) INTERGROWTH-21st centile for the given gestational age.
+    Steps: check type -> read with size limit -> verify and decode -> **plane check** (FETAL_PLANES_DB classifier)
+    -> U-Net -> ellipse fit -> HC -> (optional) INTERGROWTH-21st centile for the given gestational age.
+    If the plane check warns and ``override_plane_check`` is false, HC / area / centile are withheld
+    (``measurement_withheld: true``) and ``plane_check.message`` explains why.
     """
     image_service.check_declared_type(file, settings)
     data = await image_service.read_limited(file, settings.max_upload_bytes)
     gray = image_service.decode_grayscale(data, settings)
     # Inference is CPU/GPU bound; run it in a worker thread so the event loop stays responsive.
-    return await run_in_threadpool(service.predict, gray, pixel_size_mm, gestational_age_weeks)
+    return await run_in_threadpool(service.predict, gray, pixel_size_mm, gestational_age_weeks,
+                                   override_plane_check)
+
+
+@router.post("/plane-check", response_model=PlaneCheck, tags=["model"],
+             responses={k: ERRORS[k] for k in (400, 413, 415, 422)})
+async def plane_check(
+    service: Annotated[ModelService, Depends(get_model_service)],
+    settings: Annotated[Settings, Depends(get_settings_dep)],
+    file: Annotated[UploadFile, File(description="Ultrasound image (PNG or JPEG, max 10 MB)")],
+) -> PlaneCheck:
+    """Only the standard-plane quality gate: which plane is this, and is it trans-thalamic?"""
+    image_service.check_declared_type(file, settings)
+    data = await image_service.read_limited(file, settings.max_upload_bytes)
+    gray = image_service.decode_grayscale(data, settings)
+    return await run_in_threadpool(service.plane_check, gray)
 
 
 @router.get("/reference/hc-centiles", response_model=CentileCurves, tags=["reference"])

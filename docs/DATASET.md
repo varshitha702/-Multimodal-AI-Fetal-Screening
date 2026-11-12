@@ -1,6 +1,8 @@
-# Dataset card: HC18
+# Dataset cards: HC18 and FETAL_PLANES_DB
 
-Owner: Pujari Varshitha (dataset and preprocessing).
+Owner: Pujari Varshitha (dataset and preprocessing), for both datasets.
+
+# Part 1: HC18 (head segmentation and HC)
 
 ## Source
 
@@ -71,3 +73,53 @@ the 1-px outline so that **999 / 999 masks came out empty**; the epsilon-smoothe
 
 HC18 is a public, de-identified research dataset. The application does not store uploaded images.
 Do not upload identifiable patient data to demos.
+
+# Part 2: FETAL_PLANES_DB (standard-plane quality gate, Feature A)
+
+## Source
+
+X. P. Burgos-Artizzu, D. Coronado-Gutiérrez, B. Valenzuela-Alcaraz, E. Bonet-Carne, E. Eixarch, F. Crispi,
+E. Gratacós, "Evaluation of deep convolutional neural networks for automatic classification of common
+maternal fetal ultrasound planes", *Scientific Reports* 10, 10200 (2020). Data: Zenodo record 3904280
+(doi:10.5281/zenodo.3904280, CC BY 4.0). Not committed (`data/raw/` is gitignored); layout in `data/README.md`.
+
+## Contents (verified after download)
+
+* 12,400 PNG images from **1,792 patients**, 18–40 weeks of gestation, routine screening at two Barcelona hospitals.
+  Machines: Voluson E6 (5,862), Aloka (5,114), Voluson S10 (1,082), other (342).
+* `FETAL_PLANES_DB_data.csv` (`;`-separated, last column name `Train ` has a trailing space):
+  `Plane` (6 classes), `Brain_plane` (Trans-thalamic / Trans-cerebellum / Trans-ventricular / Other /
+  Not A Brain), `Patient_num`, and the **official** `Train` flag (1 = train, 0 = test).
+* The official train and test sets share **no patients** (896 / 896).
+
+## Split (`ml/train_planes.py` → `data/splits/fetal_planes_split.csv`, committed)
+
+* **test** = official `Train == 0` rows, untouched (final evaluation only).
+* official `Train == 1` rows → **train / val by `Patient_num`** (15 % of patients to val, seed 42), so no
+  patient has images in both. The script asserts this.
+
+| Plane | train | val | test | total |
+|---|---|---|---|---|
+| Fetal brain | 1,402 | 218 | 1,472 | 3,092 |
+| Fetal abdomen | 309 | 44 | 358 | 711 |
+| Fetal femur | 454 | 62 | 524 | 1,040 |
+| Fetal thorax | 934 | 124 | 660 | 1,718 |
+| Maternal cervix | 848 | 133 | 645 | 1,626 |
+| Other | 2,144 | 457 | 1,612 | 4,213 |
+| **Images (patients)** | **6,091 (762)** | **1,038 (134)** | **5,271 (896)** | **12,400 (1,792)** |
+
+Brain sub-planes (train / val / test): Trans-thalamic 755 / 118 / 765, Trans-cerebellum 319 / 56 / 339,
+Trans-ventricular 263 / 32 / 302, Other 65 / 12 / 66.
+
+## Preprocessing
+
+Grayscale → **letterbox** to a square (aspect ratio kept, black padding, which matches the ultrasound
+background) → resize → replicate to 3 channels → ImageNet normalisation (`ml/planes.py`, shared by training
+and inference). Training-only augmentation on the GPU: horizontal flip, rotation ±12°, scale 0.85–1.15,
+shift ±6 %, contrast/brightness/gamma jitter.
+
+## Known domain gap with HC18
+
+FETAL_PLANES_DB images span 18–40 weeks of gestation (two BCNatal sites, Hospital Clínic and Hospital Sant Joan de Déu, Barcelona; paper, Methods). HC18 (Netherlands) contains
+many **early-gestation** images (reference HC < 100 mm, about ≤ 16 weeks), and every HC18 image has black
+anonymisation boxes. Both affect how often the gate accepts HC18 images (see `docs/MODEL_CARD.md`).

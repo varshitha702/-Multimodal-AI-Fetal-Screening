@@ -1,0 +1,76 @@
+       images  patients
+split                  
+test     5271       896
+train    6091       762
+val      1038       134
+C:\Users\vishw\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages\torch\optim\lr_scheduler.py:224: UserWarning: Detected call of `lr_scheduler.step()` before `optimizer.step()`. In PyTorch 1.1.0 and later, you should call them in the opposite order: `optimizer.step()` before `lr_scheduler.step()`.  Failure to do this will result in PyTorch skipping the first value of the learning rate schedule. See more details at https://pytorch.org/docs/stable/optim.html#how-to-adjust-learning-rate
+  warnings.warn(
+epoch  1 loss 2.7439 val plane F1 0.4642 sub F1 0.3264 (77s)
+epoch  2 loss 1.3751 val plane F1 0.8665 sub F1 0.6232 (28s)
+epoch  3 loss 0.8382 val plane F1 0.9096 sub F1 0.6263 (28s)
+epoch  4 loss 0.6766 val plane F1 0.9262 sub F1 0.6729 (27s)
+epoch  5 loss 0.5695 val plane F1 0.9288 sub F1 0.6896 (28s)
+epoch  6 loss 0.4913 val plane F1 0.9317 sub F1 0.7182 (19s)
+epoch  7 loss 0.4186 val plane F1 0.9241 sub F1 0.7112 (15s)
+epoch  8 loss 0.4188 val plane F1 0.9357 sub F1 0.7743 (23s)
+epoch  9 loss 0.3214 val plane F1 0.9459 sub F1 0.7260 (28s)
+epoch 10 loss 0.3299 val plane F1 0.9284 sub F1 0.7398 (27s)
+epoch 11 loss 0.2665 val plane F1 0.9521 sub F1 0.7680 (19s)
+epoch 12 loss 0.1959 val plane F1 0.9486 sub F1 0.7252 (25s)
+epoch 13 loss 0.1784 val plane F1 0.9276 sub F1 0.7825 (27s)
+epoch 14 loss 0.1518 val plane F1 0.9447 sub F1 0.7419 (28s)
+epoch 15 loss 0.1443 val plane F1 0.9393 sub F1 0.7336 (25s)
+epoch 16 loss 0.1281 val plane F1 0.9455 sub F1 0.7641 (24s)
+epoch 17 loss 0.1123 val plane F1 0.9441 sub F1 0.7434 (27s)
+early stopping
+{
+  "epoch": 11,
+  "architecture": "EfficientNet-B0 (ImageNet) + plane head (6) + brain sub-plane head (4)",
+  "input_size": 224,
+  "planes": [
+    "Fetal brain",
+    "Fetal abdomen",
+    "Fetal femur",
+    "Fetal thorax",
+    "Maternal cervix",
+    "Other"
+  ],
+  "subplanes": [
+    "Trans-thalamic",
+    "Trans-cerebellum",
+    "Trans-ventricular",
+    "Other"
+  ],
+  "temperature_plane": 1.2337167263031006,
+  "temperature_subplane": 1.738674521446228,
+  "tt_threshold": 0.16252045333385468,
+  "val_plane_macro_f1": 0.9521166666666666,
+  "val_subplane_macro_f1": 0.767975,
+  "threshold_rule": "largest t with validation trans-thalamic recall >= 0.95",
+  "split_counts": [
+    {
+      "split": "test",
+      "images": 5271,
+      "patients": 896
+    },
+    {
+      "split": "train",
+      "images": 6091,
+      "patients": 762
+    },
+    {
+      "split": "val",
+      "images": 1038,
+      "patients": 134
+    }
+  ],
+  "epochs_run": 17,
+  "minutes": 8.0,
+  "args": {
+    "epochs": 25,
+    "batch_size": 64,
+    "lr": 0.0003,
+    "patience": 6
+  },
+  "device": "NVIDIA GeForce RTX 4050 Laptop GPU"
+}

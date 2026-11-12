@@ -33,6 +33,7 @@ export function Analyzer() {
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Prediction | null>(null);
+  const [overriding, setOverriding] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => () => abortRef.current?.abort(), []);
@@ -69,21 +70,24 @@ export function Analyzer() {
     gaGiven &&
     (!Number.isInteger(gaW) || !Number.isInteger(gaD) || gaD < 0 || gaD > 6 || gaValue! < GA_MIN || gaValue! > GA_MAX);
 
-  async function analyze() {
+  async function analyze(overridePlaneCheck = false) {
     if (!file || pxInvalid || gaInvalid) return;
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
-    setStatus("loading");
+    if (overridePlaneCheck) setOverriding(true);
+    else setStatus("loading");
     setError(null);
     try {
-      const r = await predict(file, pxValue, gaInvalid ? null : gaValue, controller.signal);
+      const r = await predict(file, pxValue, gaInvalid ? null : gaValue, controller.signal, overridePlaneCheck);
       setResult(r);
       setStatus("done");
     } catch (e) {
       if (controller.signal.aborted) return;
       setError(e instanceof ApiError ? e.message : "Unexpected error while analysing the image.");
       setStatus("error");
+    } finally {
+      setOverriding(false);
     }
   }
 
@@ -171,7 +175,7 @@ export function Analyzer() {
             <Button
               className="w-full"
               size="lg"
-              onClick={analyze}
+              onClick={() => analyze()}
               disabled={!file || pxInvalid || gaInvalid || status === "loading"}
             >
               {status === "loading" ? (
@@ -197,7 +201,13 @@ export function Analyzer() {
           )}
           {status === "loading" && <LoadingState />}
           {status === "done" && result && previewUrl && file && (
-            <ResultsPanel result={result} originalUrl={previewUrl} fileName={file.name} />
+            <ResultsPanel
+              result={result}
+              originalUrl={previewUrl}
+              fileName={file.name}
+              onOverride={() => analyze(true)}
+              overriding={overriding}
+            />
           )}
           {(status === "idle" || (status === "error" && !result)) && <EmptyState />}
         </section>
@@ -232,6 +242,7 @@ function LoadingState() {
 function EmptyState() {
   const steps = [
     ["Upload", "A PNG or JPEG trans-thalamic ultrasound image."],
+    ["Check plane", "A classifier confirms the trans-thalamic plane before measuring."],
     ["Segment", "A U-Net outlines the fetal skull."],
     ["Measure", "An ellipse is fitted and its perimeter gives the head circumference."],
   ];
@@ -245,7 +256,7 @@ function EmptyState() {
         <p className="mt-1 max-w-md text-sm text-muted-foreground">
           Results appear here: the original image, the segmentation overlay, the mask and the measurements.
         </p>
-        <ol className="mt-8 grid w-full max-w-2xl gap-4 text-left sm:grid-cols-3">
+        <ol className="mt-8 grid w-full max-w-3xl gap-4 text-left sm:grid-cols-2 xl:grid-cols-4">
           {steps.map(([title, text], i) => (
             <li key={title} className="rounded-lg border bg-muted/40 p-4">
               <span className="text-xs font-semibold text-primary">STEP {i + 1}</span>

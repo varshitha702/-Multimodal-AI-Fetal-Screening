@@ -14,6 +14,7 @@ DISCLAIMER = (
 class HealthResponse(BaseModel):
     status: Literal["ok", "degraded"]
     model_loaded: bool
+    plane_model_loaded: bool = Field(description="Standard-plane classifier loaded (quality gate active)")
     version: str
 
 
@@ -29,6 +30,8 @@ class ModelInfo(BaseModel):
     test_metrics: dict | None = Field(description="Held-out test metrics from ml/evaluate.py, if available")
     training_data: str
     intended_use: str
+    plane_classifier: dict | None = Field(
+        default=None, description="Standard-plane gate: checkpoint details and official-test metrics, if loaded")
     disclaimer: str = DISCLAIMER
 
 
@@ -49,6 +52,25 @@ class Quality(BaseModel):
     touches_border: bool = Field(description="Head mask touches the image border (head may be cut off)")
     ellipse_fit_ratio: float | None = Field(description="Mask area / fitted ellipse area (1.0 = perfect ellipse)")
     flags: list[str] = Field(description="Human-readable warnings; empty when nothing looks unusual")
+
+
+class PlaneCheck(BaseModel):
+    """Standard-plane quality gate. HC is defined on the trans-thalamic (TT) plane."""
+
+    status: Literal["pass", "warn", "unavailable"] = Field(
+        description="pass: TT plane confirmed; warn: not TT or not confident enough; unavailable: no classifier")
+    plane: str | None = Field(default=None, description="Most likely plane (FETAL_PLANES_DB classes)")
+    plane_confidence: float | None = Field(default=None, description="Calibrated probability of that plane")
+    brain_subplane: str | None = Field(default=None, description="Most likely brain plane, only for brain images")
+    brain_subplane_confidence: float | None = None
+    tt_probability: float | None = Field(
+        default=None, description="Calibrated P(brain) x P(trans-thalamic | brain); the gate score")
+    threshold: float | None = Field(default=None, description="Gate threshold, chosen on the validation set")
+    plane_probabilities: dict[str, float] = Field(default_factory=dict)
+    subplane_probabilities: dict[str, float] = Field(default_factory=dict)
+    overridden: bool = Field(default=False, description="Measurement was forced despite a warning")
+    message: str
+    model_version: str | None = None
 
 
 class GrowthAssessment(BaseModel):
@@ -83,6 +105,10 @@ class PredictionResponse(BaseModel):
     image_width: int
     image_height: int
     pixel_size_mm: float | None
+    plane_check: PlaneCheck = Field(description="Standard-plane quality gate, run before measurement")
+    measurement_withheld: bool = Field(
+        default=False, description="True when the plane check warned and override_plane_check was not set: "
+                                   "HC, area in mm2 and the centile are then not reported")
     head_detected: bool
     head_circumference_mm: float | None = Field(description="Ellipse perimeter (Ramanujan) x pixel size")
     head_area_mm2: float | None

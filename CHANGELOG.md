@@ -2,6 +2,20 @@
 
 All notable changes are listed here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased] - brief 2 (differentiating features)
+
+### Added
+- **Standard-plane quality gate (Feature A):** two-head EfficientNet-B0 (plane + brain sub-plane) trained on
+  FETAL_PLANES_DB with a patient-level split; temperature scaling per head; gate threshold chosen on validation
+  (TT recall ≥ 95 %). Official test: plane accuracy 94.0 % (macro-F1 0.934), sub-plane accuracy 82.7 %
+  (macro-F1 0.721), ECE 0.035 → 0.014; 95.7 % of TT images accepted, 99.8 % of non-brain images rejected;
+  60.3 % of HC18 images accepted (reported, not tuned). 224 px run kept as an ablation.
+- API: `plane_check` block and `measurement_withheld` in `/predict`, `override_plane_check` form field,
+  new `POST /api/v1/plane-check`, `plane_model_loaded` in `/health`, `plane_classifier` in `/model-info`.
+- UI: plane-check badge (PASS / WARN / N/A, calibrated confidence, P(TT) vs threshold) before the HC result,
+  "Measure anyway (override)" button, plane check on the printed report, plane-gate section on the model page.
+- Tests: T26–T32, P01–P13, E03/E04/E12/E13 (114 total). ADR-0006. Docker mounts the plane checkpoint.
+
 ## [1.0.0] - 2026-11-12 (Phase-1 review build)
 
 ### Fixed

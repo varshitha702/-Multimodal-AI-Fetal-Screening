@@ -1,13 +1,16 @@
+# python scripts/ui_e2e.py  (backend + next start on this laptop, 2026-11-12)
 E01 PASS  empty state, disclaimer and 'Model ready' status visible
 E02 PASS  pixel spacing auto-filled (0.06560565 mm/px)
-E03 PASS  results shown: HC 67.3 mm vs reference 67.84 mm
-E04 PASS  print report renders (screenshot + PDF)
-E05 PASS  dark theme toggles
-E06 PASS  corrupted upload shows the API's 400 message
-E07 PASS  wrong file type rejected in the browser
-E08 PASS  model page shows held-out test metrics
-E09 PASS  mobile (390 px): results render, no horizontal scroll
-E10 PASS  GA outside 14-40 weeks rejected in the form (button disabled)
-E11 PASS  GA 20+0 on 544_HC.png: centile card (42nd) and INTERGROWTH-21st chart shown
-E12 PASS  Swagger UI lists the endpoints
-12 UI checks passed
+E03 PASS  006_HC.png: plane check WARN shown before the result, HC withheld
+E04 PASS  override: HC 67.3 mm vs reference 67.84 mm, warning kept
+E05 PASS  print report renders (screenshot + PDF)
+E06 PASS  dark theme toggles
+E07 PASS  corrupted upload shows the API's 400 message
+E08 PASS  wrong file type rejected in the browser
+E09 PASS  model page shows held-out test metrics
+E10 PASS  mobile (390 px): results render, no horizontal scroll
+E11 PASS  GA outside 14-40 weeks rejected in the form (button disabled)
+E12 PASS  GA 20+0 on 544_HC.png: plane check PASS, centile card (42nd) and chart shown
+E13 PASS  femur image Patient00647_Plane5_1_of_1.png: plane check WARN ('femur'), HC withheld
+E14 PASS  Swagger UI lists the endpoints
+14 UI checks passed

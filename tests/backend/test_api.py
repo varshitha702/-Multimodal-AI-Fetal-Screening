@@ -17,6 +17,7 @@ from PIL import Image
 from backend.app.core.config import Settings
 from backend.app.main import create_app
 from ml.model import UNet
+from ml.planes import INPUT_SIZE, PlaneNet
 
 
 @pytest.fixture(scope="module")
@@ -29,8 +30,21 @@ def checkpoint(tmp_path_factory):
 
 
 def make_client(checkpoint_path, **overrides) -> TestClient:
+    # By default no plane classifier (gate "unavailable"), so these contract tests never depend on whether a
+    # trained plane checkpoint happens to exist in outputs/.
+    overrides.setdefault("plane_checkpoint_path", checkpoint_path.parent / "no_plane_model.pth")
     settings = Settings(checkpoint_path=checkpoint_path, device="cpu", **overrides)
     return TestClient(create_app(settings))
+
+
+def plane_checkpoint(directory, threshold: float):
+    """Random-weight plane classifier; threshold 0 makes the gate always pass, > 1 always warn."""
+    torch.manual_seed(0)
+    path = directory / f"planes_t{threshold}.pth"
+    torch.save({"model_state_dict": PlaneNet().state_dict(), "epoch": 3, "input_size": INPUT_SIZE,
+                "temperature_plane": 1.0, "temperature_subplane": 1.0, "tt_threshold": threshold,
+                "planes": [], "subplanes": [], "architecture": "test"}, path)
+    return path
 
 
 @pytest.fixture(scope="module")
@@ -57,7 +71,7 @@ def post(client, data: bytes, content_type="image/png", name="scan.png", **form)
 def test_T01_health_ok_when_model_loaded(client):
     r = client.get("/api/v1/health")
     assert r.status_code == 200
-    assert r.json() == {"status": "ok", "model_loaded": True, "version": "1.0.0"}
+    assert r.json() == {"status": "ok", "model_loaded": True, "plane_model_loaded": False, "version": "1.0.0"}
 
 
 def test_T02_model_info(client):
@@ -227,3 +241,79 @@ def test_T25_centile_curves_endpoint(client):
     pts = body["points"]
     assert pts[0]["ga_weeks"] == 14 and pts[-1]["ga_weeks"] == 40 and len(pts) == 53
     assert round(pts[0]["p50"], 1) == 97.9  # published median at 14 weeks
+
+
+# --- standard-plane quality gate (Feature A) -------------------------------------------------------
+
+@pytest.fixture(scope="module")
+def gate_pass_client(checkpoint):
+    with make_client(checkpoint, plane_checkpoint_path=plane_checkpoint(checkpoint.parent, 0.0)) as c:
+        yield c
+
+
+@pytest.fixture(scope="module")
+def gate_warn_client(checkpoint):
+    with make_client(checkpoint, plane_checkpoint_path=plane_checkpoint(checkpoint.parent, 1.01)) as c:
+        yield c
+
+
+def test_T26_health_and_model_info_report_plane_model(gate_pass_client):
+    assert gate_pass_client.get("/api/v1/health").json()["plane_model_loaded"] is True
+    info = gate_pass_client.get("/api/v1/model-info").json()["plane_classifier"]
+    assert info["tt_threshold"] == 0.0 and info["checkpoint_epoch"] == 3
+
+
+def test_T27_gate_pass_reports_measurement(gate_pass_client):
+    body = post(gate_pass_client, png_bytes(), pixel_size_mm=0.2).json()
+    pc = body["plane_check"]
+    assert pc["status"] == "pass" and body["measurement_withheld"] is False
+    assert pc["plane"] in pc["plane_probabilities"]
+    assert sum(pc["plane_probabilities"].values()) == pytest.approx(1, abs=1e-3)
+    assert "Trans-thalamic plane confirmed" in pc["message"]
+    if body["ellipse"] is not None:
+        assert body["head_circumference_mm"] > 0
+
+
+def test_T28_gate_warn_withholds_measurement(gate_warn_client):
+    body = post(gate_warn_client, png_bytes(), pixel_size_mm=0.2, gestational_age_weeks=22).json()
+    pc = body["plane_check"]
+    assert pc["status"] == "warn" and pc["overridden"] is False
+    assert "HC is defined on the trans-thalamic plane; please re-acquire" in pc["message"]
+    assert body["measurement_withheld"] is True
+    assert body["head_circumference_mm"] is None and body["head_area_mm2"] is None and body["growth"] is None
+    assert body["quality"]["flags"][0].startswith("Measurement withheld")
+    assert body["overlay_png_base64"]  # the outline is still shown
+
+
+def test_T29_gate_warn_with_override_measures(gate_warn_client):
+    body = post(gate_warn_client, png_bytes(), pixel_size_mm=0.2, override_plane_check="true").json()
+    pc = body["plane_check"]
+    assert pc["status"] == "warn" and pc["overridden"] is True and "Measured anyway" in pc["message"]
+    assert body["measurement_withheld"] is False
+    if body["ellipse"] is None:
+        pytest.skip("random weights produced no ellipse")
+    assert body["head_circumference_mm"] > 0
+
+
+def test_T30_no_plane_model_means_unavailable_not_blocking(client):
+    body = post(client, png_bytes(), pixel_size_mm=0.2).json()
+    assert body["plane_check"]["status"] == "unavailable"
+    assert body["measurement_withheld"] is False
+
+
+def test_T31_plane_check_endpoint(gate_warn_client, client):
+    r = gate_warn_client.post("/api/v1/plane-check", files={"file": ("a.png", png_bytes(), "image/png")})
+    assert r.status_code == 200
+    assert r.json()["status"] == "warn" and r.json()["tt_probability"] is not None
+    assert client.post("/api/v1/plane-check", files={"file": ("a.png", png_bytes(), "image/png")}
+                       ).json()["status"] == "unavailable"
+    bad = gate_warn_client.post("/api/v1/plane-check", files={"file": ("a.pdf", b"%PDF", "application/pdf")})
+    assert bad.status_code == 415
+    assert gate_warn_client.post("/api/v1/plane-check",
+                                 files={"file": ("a.png", b"junk", "image/png")}).status_code == 400
+
+
+def test_T32_invalid_override_flag_rejected_422(client):
+    r = client.post("/api/v1/predict", files={"file": ("a.png", png_bytes(), "image/png")},
+                    data={"override_plane_check": "maybe"})
+    assert r.status_code == 422

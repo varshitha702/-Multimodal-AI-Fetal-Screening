@@ -12,3 +12,16 @@ data/raw/HC18/
 ```
 
 Check it with `python scripts/check_hc18.py`.
+
+FETAL_PLANES_DB (standard-plane gate, Feature A): Zenodo record 3904280 (doi:10.5281/zenodo.3904280),
+file `FETAL_PLANES_ZENODO.zip` (2,088,522,169 bytes). Extract it as:
+
+```text
+data/raw/FETAL_PLANES_DB/
+├── FETAL_PLANES_DB_data.csv            # ';'-separated: Image_name, Patient_num, Plane, Brain_plane, ..., Train
+├── FETAL_PLANES_DB_data.xlsx
+└── Images/                             # 12,400 PNG images
+```
+
+`python -m ml.train_planes` caches letterboxed images in `data/processed/` (gitignored) and uses the committed
+split `data/splits/fetal_planes_split.csv`.

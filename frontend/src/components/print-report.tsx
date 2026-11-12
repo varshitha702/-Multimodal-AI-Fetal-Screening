@@ -12,6 +12,10 @@ export function PrintReport({ result, originalUrl, fileName }: Props) {
   const rows: [string, string][] = [
     ["Image", `${fileName} (${result.image_width} × ${result.image_height} px)`],
     ["Pixel spacing", result.pixel_size_mm ? `${result.pixel_size_mm} mm/px` : "not provided"],
+    [
+      "Plane check",
+      `${result.plane_check.status.toUpperCase()}${result.plane_check.overridden ? " (overridden)" : ""}: ${result.plane_check.message}`,
+    ],
     ["Head detected", result.head_detected ? "yes" : "no"],
     ["Head circumference", result.head_circumference_mm !== null ? `${result.head_circumference_mm.toFixed(1)} mm` : "—"],
     [

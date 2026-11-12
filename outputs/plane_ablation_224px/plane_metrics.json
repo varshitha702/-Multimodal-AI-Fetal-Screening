@@ -1,0 +1,262 @@
+{
+  "dataset": "FETAL_PLANES_DB official test split (Burgos-Artizzu et al., 2020)",
+  "checkpoint_epoch": 11,
+  "architecture": "EfficientNet-B0 (ImageNet) + plane head (6) + brain sub-plane head (4)",
+  "plane": {
+    "n": 5271,
+    "accuracy": 0.9349,
+    "macro_f1": 0.9296,
+    "per_class": {
+      "Fetal brain": {
+        "precision": 0.9786,
+        "recall": 0.9952,
+        "f1": 0.9869,
+        "support": 1472
+      },
+      "Fetal abdomen": {
+        "precision": 0.8859,
+        "recall": 0.933,
+        "f1": 0.9088,
+        "support": 358
+      },
+      "Fetal femur": {
+        "precision": 0.8512,
+        "recall": 0.895,
+        "f1": 0.8726,
+        "support": 524
+      },
+      "Fetal thorax": {
+        "precision": 0.9083,
+        "recall": 0.9303,
+        "f1": 0.9192,
+        "support": 660
+      },
+      "Maternal cervix": {
+        "precision": 0.9923,
+        "recall": 0.9984,
+        "f1": 0.9954,
+        "support": 645
+      },
+      "Other": {
+        "precision": 0.9218,
+        "recall": 0.8697,
+        "f1": 0.895,
+        "support": 1612
+      }
+    },
+    "confusion_matrix": {
+      "labels": [
+        "Fetal brain",
+        "Fetal abdomen",
+        "Fetal femur",
+        "Fetal thorax",
+        "Maternal cervix",
+        "Other"
+      ],
+      "rows_true_cols_pred": [
+        [
+          1465,
+          3,
+          0,
+          1,
+          1,
+          2
+        ],
+        [
+          2,
+          334,
+          0,
+          2,
+          0,
+          20
+        ],
+        [
+          0,
+          0,
+          469,
+          0,
+          0,
+          55
+        ],
+        [
+          0,
+          4,
+          0,
+          614,
+          0,
+          42
+        ],
+        [
+          0,
+          1,
+          0,
+          0,
+          644,
+          0
+        ],
+        [
+          30,
+          35,
+          82,
+          59,
+          4,
+          1402
+        ]
+      ]
+    },
+    "calibration": {
+      "temperature": 1.2337,
+      "ece_before": 0.027,
+      "ece_after": 0.0146,
+      "nll_before": 0.2108,
+      "nll_after": 0.2
+    }
+  },
+  "brain_subplane": {
+    "n": 1472,
+    "accuracy": 0.8159,
+    "macro_f1": 0.7191,
+    "per_class": {
+      "Trans-thalamic": {
+        "precision": 0.8236,
+        "recall": 0.8667,
+        "f1": 0.8446,
+        "support": 765
+      },
+      "Trans-cerebellum": {
+        "precision": 0.8523,
+        "recall": 0.885,
+        "f1": 0.8683,
+        "support": 339
+      },
+      "Trans-ventricular": {
+        "precision": 0.832,
+        "recall": 0.7053,
+        "f1": 0.7634,
+        "support": 302
+      },
+      "Other": {
+        "precision": 0.4237,
+        "recall": 0.3788,
+        "f1": 0.4,
+        "support": 66
+      }
+    },
+    "confusion_matrix": {
+      "labels": [
+        "Trans-thalamic",
+        "Trans-cerebellum",
+        "Trans-ventricular",
+        "Other"
+      ],
+      "rows_true_cols_pred": [
+        [
+          663,
+          45,
+          37,
+          20
+        ],
+        [
+          37,
+          300,
+          0,
+          2
+        ],
+        [
+          75,
+          2,
+          213,
+          12
+        ],
+        [
+          30,
+          5,
+          6,
+          25
+        ]
+      ]
+    },
+    "calibration": {
+      "temperature": 1.7387,
+      "ece_before": 0.0994,
+      "ece_after": 0.033,
+      "nll_before": 0.628,
+      "nll_after": 0.5112
+    }
+  },
+  "gate": {
+    "threshold": 0.1625,
+    "threshold_rule": "largest t with validation trans-thalamic recall >= 0.95",
+    "tt_acceptance_rate": 0.9529,
+    "non_tt_rejection_rate": 0.9323,
+    "other_brain_planes_rejection_rate": 0.5856,
+    "non_brain_rejection_rate": 0.9968,
+    "per_category": {
+      "Brain: Other": {
+        "n": 66,
+        "pass_rate": 0.6061
+      },
+      "Brain: Trans-cerebellum": {
+        "n": 339,
+        "pass_rate": 0.2537
+      },
+      "Brain: Trans-thalamic": {
+        "n": 765,
+        "pass_rate": 0.9529
+      },
+      "Brain: Trans-ventricular": {
+        "n": 302,
+        "pass_rate": 0.553
+      },
+      "Fetal abdomen": {
+        "n": 358,
+        "pass_rate": 0.0056
+      },
+      "Fetal femur": {
+        "n": 524,
+        "pass_rate": 0.0019
+      },
+      "Fetal thorax": {
+        "n": 660,
+        "pass_rate": 0.0
+      },
+      "Maternal cervix": {
+        "n": 645,
+        "pass_rate": 0.0
+      },
+      "Other": {
+        "n": 1612,
+        "pass_rate": 0.0056
+      }
+    }
+  },
+  "hc18_acceptance": {
+    "n": 1334,
+    "acceptance_rate": 0.6394,
+    "acceptance_by_set": {
+      "test_set": {
+        "n": 335,
+        "acceptance_rate": 0.6239
+      },
+      "training_set": {
+        "n": 999,
+        "acceptance_rate": 0.6446
+      }
+    },
+    "predicted_plane_counts": {
+      "Fetal brain": 1256,
+      "Other": 50,
+      "Fetal abdomen": 10,
+      "Fetal thorax": 8,
+      "Maternal cervix": 6,
+      "Fetal femur": 4
+    },
+    "predicted_subplane_counts_if_brain": {
+      "Trans-thalamic": 586,
+      "Trans-ventricular": 471,
+      "Other": 168,
+      "Trans-cerebellum": 31
+    },
+    "median_p_tt": 0.3155
+  }
+}

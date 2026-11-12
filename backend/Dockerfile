@@ -6,6 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     FETALAI_CHECKPOINT_PATH=/models/hc18_unet_best.pth \
+    FETALAI_PLANE_CHECKPOINT_PATH=/models/plane_classifier_best.pth \
     FETALAI_DEVICE=cpu
 
 WORKDIR /app
@@ -20,6 +21,7 @@ RUN pip install --upgrade "pip>=25.1" \
 COPY ml ml
 COPY backend backend
 COPY outputs/test_metrics.json outputs/test_metrics.json
+COPY outputs/plane_metrics.json outputs/plane_metrics.json
 
 RUN useradd --create-home --uid 10001 app
 USER app

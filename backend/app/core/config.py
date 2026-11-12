@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     app_name: str = "FetalAI API"
     version: str = "1.0.0"
     checkpoint_path: Path = REPO_ROOT / "outputs" / "hc18_unet_best.pth"
+    # Standard-plane quality gate (FETAL_PLANES_DB classifier). If the file is missing the API still works and
+    # every response says the plane check was unavailable.
+    plane_checkpoint_path: Path = REPO_ROOT / "outputs" / "plane_classifier_best.pth"
     device: str | None = Field(default=None, description="'cuda', 'cpu' or None for automatic")
     max_upload_mb: float = 10.0
     min_image_side: int = 64

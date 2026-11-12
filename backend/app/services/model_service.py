@@ -15,15 +15,19 @@ from backend.app.schemas.prediction import (
     EllipseParams,
     GrowthAssessment,
     ModelInfo,
+    PlaneCheck,
     PredictionResponse,
     Quality,
 )
 from backend.app.services.image_service import png_base64
 from ml import intergrowth
 from ml.inference import Prediction, Segmenter
+from ml.planes import PlaneClassifier, PlaneResult
 
 log = logging.getLogger("fetalai.model")
 TEST_METRICS_PATH = REPO_ROOT / "outputs" / "test_metrics.json"
+PLANE_METRICS_PATH = REPO_ROOT / "outputs" / "plane_metrics.json"
+RE_ACQUIRE = "HC is defined on the trans-thalamic plane; please re-acquire."
 
 # Quality-flag thresholds (heuristics for user feedback, not clinical criteria)
 LOW_CONFIDENCE = 0.85
@@ -37,6 +41,8 @@ class ModelService:
         self.settings = settings
         self.segmenter: Segmenter | None = None
         self.load_error: str | None = None
+        self.planes: PlaneClassifier | None = None
+        self.plane_load_error: str | None = None
 
     @property
     def ready(self) -> bool:
@@ -55,6 +61,21 @@ class ModelService:
         except Exception as exc:  # corrupt checkpoint, CUDA problem, ...
             self.load_error = f"{type(exc).__name__}: {exc}"
             log.exception("model not loaded")
+        self._load_planes()
+
+    def _load_planes(self) -> None:
+        """The plane gate is optional: without it /predict still measures and says the check was unavailable."""
+        path = Path(self.settings.plane_checkpoint_path)
+        try:
+            self.planes = PlaneClassifier(path, device=self.settings.device)
+            log.info("plane classifier loaded", extra={"checkpoint": str(path),
+                                                       "threshold": round(self.planes.threshold, 4)})
+        except FileNotFoundError:
+            self.plane_load_error = f"Plane checkpoint not found: {path}"
+            log.warning("plane classifier not loaded", extra={"reason": self.plane_load_error})
+        except Exception as exc:
+            self.plane_load_error = f"{type(exc).__name__}: {exc}"
+            log.exception("plane classifier not loaded")
 
     def info(self) -> ModelInfo:
         seg = self.segmenter
@@ -72,12 +93,76 @@ class ModelService:
             training_data="HC18 grand challenge training set (van den Heuvel et al., 2018), group-level split",
             intended_use="Fetal head segmentation and head-circumference measurement on 2-D ultrasound "
                          "trans-thalamic plane images, for research and teaching only.",
+            plane_classifier=self._plane_info(),
         )
 
+    def _plane_info(self) -> dict | None:
+        if self.planes is None:
+            return None
+        meta = self.planes.meta
+        info = {
+            "architecture": meta.get("architecture"), "checkpoint_epoch": meta.get("epoch"),
+            "planes": meta.get("planes"), "subplanes": meta.get("subplanes"),
+            "temperature_plane": meta.get("temperature_plane"),
+            "temperature_subplane": meta.get("temperature_subplane"),
+            "tt_threshold": self.planes.threshold, "threshold_rule": meta.get("threshold_rule"),
+            "training_data": "FETAL_PLANES_DB (Burgos-Artizzu et al., 2020), official train set split by patient",
+            "test_metrics": None,
+        }
+        if PLANE_METRICS_PATH.is_file():
+            m = json.loads(PLANE_METRICS_PATH.read_text())
+            info["test_metrics"] = {
+                "plane_accuracy": m["plane"]["accuracy"], "plane_macro_f1": m["plane"]["macro_f1"],
+                "subplane_accuracy": m["brain_subplane"]["accuracy"],
+                "subplane_macro_f1": m["brain_subplane"]["macro_f1"],
+                "plane_ece_before": m["plane"]["calibration"]["ece_before"],
+                "plane_ece_after": m["plane"]["calibration"]["ece_after"],
+                "gate": m["gate"], "hc18_acceptance": m["hc18_acceptance"],
+            }
+        return info
+
+    def plane_check(self, gray: np.ndarray, override: bool = False) -> PlaneCheck:
+        """Run the standard-plane classifier and turn its result into the API block."""
+        if self.planes is None:
+            return PlaneCheck(status="unavailable", message="Plane classifier not loaded; plane check skipped.")
+        r = self.planes.check(gray)
+        return PlaneCheck(
+            status="pass" if r.passed else "warn", plane=r.plane, plane_confidence=round(r.plane_confidence, 4),
+            brain_subplane=r.brain_subplane,
+            brain_subplane_confidence=None if r.brain_subplane_confidence is None
+            else round(r.brain_subplane_confidence, 4),
+            tt_probability=round(r.tt_probability, 4), threshold=round(r.threshold, 4),
+            plane_probabilities={k: round(v, 4) for k, v in r.plane_probabilities.items()},
+            subplane_probabilities={k: round(v, 4) for k, v in r.subplane_probabilities.items()},
+            overridden=override and not r.passed, message=self._plane_message(r, override),
+            model_version=f"planes-effnetb0-epoch{self.planes.meta.get('epoch')}",
+        )
+
+    @staticmethod
+    def _plane_message(r: PlaneResult, override: bool) -> str:
+        if r.passed:
+            return f"Trans-thalamic plane confirmed (P = {r.tt_probability:.2f})."
+        if r.plane != "Fetal brain":
+            what = "a non-fetal (other)" if r.plane == "Other" else f"a {r.plane.lower()}"
+            msg = f"This looks like {what} image ({r.plane_confidence:.0%}), not a fetal brain. "
+        elif r.brain_subplane != "Trans-thalamic":
+            msg = f"This looks like a {r.brain_subplane.lower()} brain plane, not trans-thalamic. "
+        else:
+            msg = (f"Trans-thalamic plane not confirmed with enough confidence "
+                   f"(P = {r.tt_probability:.2f} < {r.threshold:.2f}). ")
+        msg += RE_ACQUIRE
+        if override:
+            msg += " Measured anyway because override_plane_check was set."
+        return msg
+
     def predict(self, gray: np.ndarray, pixel_size_mm: float | None,
-                gestational_age_weeks: float | None = None) -> PredictionResponse:
+                gestational_age_weeks: float | None = None, override_plane_check: bool = False) -> PredictionResponse:
         t0 = time.perf_counter()
+        plane = self.plane_check(gray, override_plane_check)
+        withheld = plane.status == "warn" and not override_plane_check
         pred = self.segmenter.predict(gray, pixel_size_mm)
+        if withheld:  # still segment (to show the outline) but do not report a measurement on the wrong plane
+            pred.hc_mm = None
         elapsed_ms = (time.perf_counter() - t0) * 1000
         h, w = gray.shape
         area_px = int(pred.mask.sum())
@@ -88,17 +173,23 @@ class ModelService:
                 center_x_px=round(e.cx, 2), center_y_px=round(e.cy, 2),
                 semi_major_px=round(e.semi_major, 2), semi_minor_px=round(e.semi_minor, 2),
                 angle_deg=round(e.angle_deg, 2),
-                semi_major_mm=round(e.semi_major * pixel_size_mm, 2) if pixel_size_mm else None,
-                semi_minor_mm=round(e.semi_minor * pixel_size_mm, 2) if pixel_size_mm else None,
+                semi_major_mm=round(e.semi_major * pixel_size_mm, 2) if pixel_size_mm and not withheld else None,
+                semi_minor_mm=round(e.semi_minor * pixel_size_mm, 2) if pixel_size_mm and not withheld else None,
             )
+        quality = self._quality(pred, pixel_size_mm, gestational_age_weeks)
+        if withheld:
+            quality.flags.insert(0, "Measurement withheld: the plane check did not confirm a trans-thalamic plane. "
+                                    "Resend with override_plane_check=true to measure anyway.")
         response = PredictionResponse(
             image_width=w, image_height=h, pixel_size_mm=pixel_size_mm,
+            plane_check=plane, measurement_withheld=withheld,
             head_detected=e is not None,
             head_circumference_mm=round(pred.hc_mm, 2) if pred.hc_mm is not None else None,
-            head_area_mm2=round(area_px * pixel_size_mm ** 2, 1) if (pixel_size_mm and area_px) else None,
+            head_area_mm2=round(area_px * pixel_size_mm ** 2, 1) if (pixel_size_mm and area_px and not withheld)
+            else None,
             head_area_px=area_px,
             ellipse=ellipse,
-            quality=self._quality(pred, pixel_size_mm, gestational_age_weeks),
+            quality=quality,
             growth=self._growth(pred.hc_mm, gestational_age_weeks),
             mask_png_base64=png_base64((pred.mask * 255).astype(np.uint8)),
             overlay_png_base64=png_base64(self._overlay(gray, pred)),
@@ -106,6 +197,7 @@ class ModelService:
             model_version=f"hc18-unet-epoch{self.segmenter.meta.get('epoch')}",
         )
         log.info("prediction", extra={"width": w, "height": h, "head_detected": response.head_detected,
+                                      "plane_status": plane.status, "withheld": withheld,
                                       "hc_mm": response.head_circumference_mm, "ms": response.inference_ms})
         return response
 

@@ -1,0 +1,6 @@
+# Docker backend image (CPU) with the plane gate, 12 Nov 2026
+# docker compose build backend; docker run -p 8001:8000 with both checkpoints mounted read-only
+GET  /api/v1/health      -> {"status":"ok","model_loaded":true,"plane_model_loaded":true,"version":"1.0.0"}
+POST /api/v1/plane-check (544_HC.png) -> status pass, Fetal brain 0.9837, Trans-thalamic 0.7321, P(TT) 0.7202, threshold 0.1379
+POST /api/v1/predict     (544_HC.png, pixel_size_mm=0.1) -> plane_check pass, HC 145.5 mm, inference_ms 170.1 (CPU, plane check + U-Net)
+GET  /api/v1/model-info  -> device cpu, plane_classifier.test_metrics.plane_accuracy 0.9397

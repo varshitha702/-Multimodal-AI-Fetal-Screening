@@ -1,0 +1,82 @@
+       images  patients
+split                  
+test     5271       896
+train    6091       762
+val      1038       134
+C:\Users\vishw\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages\torch\optim\lr_scheduler.py:224: UserWarning: Detected call of `lr_scheduler.step()` before `optimizer.step()`. In PyTorch 1.1.0 and later, you should call them in the opposite order: `optimizer.step()` before `lr_scheduler.step()`.  Failure to do this will result in PyTorch skipping the first value of the learning rate schedule. See more details at https://pytorch.org/docs/stable/optim.html#how-to-adjust-learning-rate
+  warnings.warn(
+epoch  1 loss 2.5096 val plane F1 0.6014 sub F1 0.3728 (73s)
+epoch  2 loss 1.1903 val plane F1 0.9162 sub F1 0.5353 (49s)
+epoch  3 loss 0.8106 val plane F1 0.9327 sub F1 0.6704 (56s)
+epoch  4 loss 0.6547 val plane F1 0.9394 sub F1 0.7291 (35s)
+epoch  5 loss 0.5707 val plane F1 0.9364 sub F1 0.6501 (57s)
+epoch  6 loss 0.5190 val plane F1 0.9464 sub F1 0.6480 (42s)
+epoch  7 loss 0.4574 val plane F1 0.9531 sub F1 0.7602 (51s)
+epoch  8 loss 0.3481 val plane F1 0.9568 sub F1 0.7480 (52s)
+epoch  9 loss 0.3099 val plane F1 0.9529 sub F1 0.7558 (48s)
+epoch 10 loss 0.3054 val plane F1 0.9480 sub F1 0.7307 (30s)
+epoch 11 loss 0.2651 val plane F1 0.9415 sub F1 0.7436 (30s)
+epoch 12 loss 0.1922 val plane F1 0.9526 sub F1 0.7667 (30s)
+epoch 13 loss 0.1607 val plane F1 0.9474 sub F1 0.7727 (30s)
+epoch 14 loss 0.1470 val plane F1 0.9521 sub F1 0.7764 (30s)
+epoch 15 loss 0.1130 val plane F1 0.9580 sub F1 0.7622 (30s)
+epoch 16 loss 0.0977 val plane F1 0.9541 sub F1 0.7847 (30s)
+epoch 17 loss 0.0723 val plane F1 0.9536 sub F1 0.7498 (40s)
+epoch 18 loss 0.0668 val plane F1 0.9559 sub F1 0.7804 (59s)
+epoch 19 loss 0.0534 val plane F1 0.9614 sub F1 0.7761 (43s)
+epoch 20 loss 0.0456 val plane F1 0.9576 sub F1 0.7676 (53s)
+epoch 21 loss 0.0523 val plane F1 0.9519 sub F1 0.7704 (58s)
+epoch 22 loss 0.0416 val plane F1 0.9578 sub F1 0.7680 (56s)
+early stopping
+{
+  "epoch": 16,
+  "architecture": "EfficientNet-B0 (ImageNet) + plane head (6) + brain sub-plane head (4)",
+  "input_size": 320,
+  "planes": [
+    "Fetal brain",
+    "Fetal abdomen",
+    "Fetal femur",
+    "Fetal thorax",
+    "Maternal cervix",
+    "Other"
+  ],
+  "subplanes": [
+    "Trans-thalamic",
+    "Trans-cerebellum",
+    "Trans-ventricular",
+    "Other"
+  ],
+  "temperature_plane": 1.6232424974441528,
+  "temperature_subplane": 2.2818591594696045,
+  "tt_threshold": 0.1379036158323288,
+  "val_plane_macro_f1": 0.9541333333333334,
+  "val_subplane_macro_f1": 0.784725,
+  "threshold_rule": "largest t with validation trans-thalamic recall >= 0.95",
+  "split_counts": [
+    {
+      "split": "test",
+      "images": 5271,
+      "patients": 896
+    },
+    {
+      "split": "train",
+      "images": 6091,
+      "patients": 762
+    },
+    {
+      "split": "val",
+      "images": 1038,
+      "patients": 134
+    }
+  ],
+  "epochs_run": 22,
+  "minutes": 16.5,
+  "args": {
+    "size": 320,
+    "epochs": 25,
+    "batch_size": 32,
+    "lr": 0.0003,
+    "patience": 6
+  },
+  "device": "NVIDIA GeForce RTX 4050 Laptop GPU"
+}

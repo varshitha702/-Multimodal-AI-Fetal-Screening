@@ -4,6 +4,7 @@ import { AlertTriangle, CheckCircle2, Download, FileJson, Printer } from "lucide
 
 import { GrowthPanel } from "@/components/growth-panel";
 import { MetricCard } from "@/components/metric-card";
+import { PlaneCheckCard } from "@/components/plane-check";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,8 @@ interface Props {
   result: Prediction;
   originalUrl: string;
   fileName: string;
+  onOverride?: () => void;
+  overriding?: boolean;
 }
 
 function download(href: string, name: string) {
@@ -25,7 +28,7 @@ function download(href: string, name: string) {
 
 const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
 
-export function ResultsPanel({ result, originalUrl, fileName }: Props) {
+export function ResultsPanel({ result, originalUrl, fileName, onOverride, overriding }: Props) {
   const stem = fileName.replace(/\.[^.]+$/, "");
   const e = result.ellipse;
   const flags = result.quality.flags;
@@ -42,15 +45,26 @@ export function ResultsPanel({ result, originalUrl, fileName }: Props) {
 
   return (
     <div className="space-y-6" data-testid="results">
+      <PlaneCheckCard
+        check={result.plane_check}
+        withheld={result.measurement_withheld}
+        onOverride={onOverride}
+        overriding={overriding}
+      />
+
       <Card>
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0">
           <CardTitle className="flex items-center gap-2 text-lg">
-            {result.head_detected ? (
+            {result.head_detected && !result.measurement_withheld ? (
               <CheckCircle2 className="size-5 text-emerald-500" />
             ) : (
               <AlertTriangle className="size-5 text-amber-500" />
             )}
-            {result.head_detected ? "Fetal head segmented" : "No fetal head detected"}
+            {result.measurement_withheld
+              ? "Segmentation preview (measurement withheld)"
+              : result.head_detected
+                ? "Fetal head segmented"
+                : "No fetal head detected"}
           </CardTitle>
           <div className="flex flex-wrap gap-2 print:hidden">
             <Button variant="outline" size="sm" onClick={() => window.print()}>
@@ -90,7 +104,13 @@ export function ResultsPanel({ result, originalUrl, fileName }: Props) {
           label="Head circumference"
           value={result.head_circumference_mm !== null ? result.head_circumference_mm.toFixed(1) : "—"}
           unit={result.head_circumference_mm !== null ? "mm" : undefined}
-          hint={result.pixel_size_mm ? `at ${result.pixel_size_mm.toFixed(4)} mm/px` : "needs pixel spacing"}
+          hint={
+            result.measurement_withheld
+              ? "withheld: plane check"
+              : result.pixel_size_mm
+                ? `at ${result.pixel_size_mm.toFixed(4)} mm/px${result.plane_check.overridden ? " · override" : ""}`
+                : "needs pixel spacing"
+          }
           highlight
         />
         <MetricCard

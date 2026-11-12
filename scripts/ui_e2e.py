@@ -19,8 +19,16 @@ SHOTS = ROOT / "docs" / "screenshots"
 WEB = "http://localhost:3000"
 API = "http://localhost:8000"
 TRAIN_DIR = ROOT / "data" / "raw" / "HC18" / "training_set"
-DEMO_IMAGE = "006_HC.png"  # from the held-out TEST split (reference HC 67.84 mm)
+DEMO_IMAGE = "006_HC.png"  # held-out TEST split, reference HC 67.84 mm; early gestation -> plane gate warns
 GA_DEMO_IMAGE = "544_HC.png"  # held-out TEST split, reference HC 171.4 mm (within the 14-40 week range)
+PLANES_DIR = ROOT / "data" / "raw" / "FETAL_PLANES_DB" / "Images"
+
+
+def wrong_plane_image() -> Path:
+    """A FETAL_PLANES_DB official-TEST femur image that the gate rejects (most confident one)."""
+    df = pd.read_csv(ROOT / "outputs" / "plane_test_predictions.csv")
+    df = df[(df.plane == "Fetal femur") & (df.pred_plane == "Fetal femur") & ~df.passed]
+    return PLANES_DIR / f"{df.sort_values('plane_conf').iloc[-1].image}.png"
 
 
 def main() -> int:
@@ -57,14 +65,22 @@ def main() -> int:
         page.screenshot(path=SHOTS / "ui_upload_ready.png")
         checks.append(f"pixel spacing auto-filled ({px} mm/px)")
 
-        # 3. Analyse -> results
+        # 3. Analyse -> plane gate warns (early-gestation image, outside FETAL_PLANES_DB) -> HC withheld;
+        #    "Measure anyway" -> HC reported with the warning kept
         page.get_by_role("button", name="Analyse image").click()
         expect(page.get_by_test_id("results")).to_be_visible(timeout=30000)
+        badge = page.get_by_test_id("plane-check")
+        expect(badge).to_have_attribute("data-status", "warn")
+        expect(page.get_by_test_id("metric-head-circumference")).to_have_text("—")
+        checks.append(f"{DEMO_IMAGE}: plane check WARN shown before the result, HC withheld")
+        page.get_by_role("button", name="Measure anyway (override)").click()
+        expect(badge).to_contain_text("Measured anyway", timeout=30000)
         hc_text = page.get_by_test_id("metric-head-circumference").inner_text()
         hc = float(re.search(r"[\d.]+", hc_text).group())
         assert abs(hc - ref_hc) < 5, (hc, ref_hc)
         page.screenshot(path=SHOTS / "ui_results.png", full_page=True)
-        checks.append(f"results shown: HC {hc} mm vs reference {ref_hc} mm")
+        badge.screenshot(path=SHOTS / "ui_plane_check_override.png")
+        checks.append(f"override: HC {hc} mm vs reference {ref_hc} mm, warning kept")
 
         # 4. Printable report (print media emulation)
         page.emulate_media(media="print")
@@ -132,13 +148,31 @@ def main() -> int:
         expect(gpage.get_by_test_id("growth-panel")).to_be_visible(timeout=30000)
         expect(gpage.get_by_test_id("centile-chart").locator("svg path").first).to_be_visible(timeout=15000)
         centile = gpage.get_by_test_id("metric-centile").inner_text()
+        expect(gpage.get_by_test_id("plane-check")).to_have_attribute("data-status", "pass")
+        gpage.get_by_test_id("plane-check").screenshot(path=SHOTS / "ui_plane_check_pass.png")
         gpage.screenshot(path=SHOTS / "ui_results_centile.png", full_page=True)
         gpage.emulate_media(media="print")
         gpage.screenshot(path=SHOTS / "ui_report_centile_print.png", full_page=True)
         gpage.emulate_media(media="screen")
-        checks.append(f"GA 20+0 on {GA_DEMO_IMAGE}: centile card ({centile}) and INTERGROWTH-21st chart shown")
+        checks.append(f"GA 20+0 on {GA_DEMO_IMAGE}: plane check PASS, centile card ({centile}) and chart shown")
 
-        # 11. Swagger docs
+        # 11. Plane gate on a different plane: a FETAL_PLANES_DB test femur image -> WARN, HC withheld
+        femur = wrong_plane_image()
+        fpage = ctx.new_page()
+        fpage.on("pageerror", lambda e: errors.append(str(e)))
+        fpage.goto(WEB)
+        fpage.get_by_test_id("file-input").set_input_files(femur)
+        fpage.locator("#pixel-size").fill("0.1")
+        fpage.get_by_role("button", name="Analyse image").click()
+        badge = fpage.get_by_test_id("plane-check")
+        expect(badge).to_have_attribute("data-status", "warn", timeout=30000)
+        expect(badge).to_contain_text("please re-acquire")
+        expect(fpage.get_by_test_id("metric-head-circumference")).to_have_text("—")
+        expect(fpage.get_by_text("withheld: plane check")).to_be_visible()
+        fpage.screenshot(path=SHOTS / "ui_plane_check_warn.png", full_page=True)
+        checks.append(f"femur image {femur.name}: plane check WARN ('femur'), HC withheld")
+
+        # 12. Swagger docs
         page.goto(f"{API}/docs")
         expect(page.get_by_text("/api/v1/predict")).to_be_visible(timeout=15000)
         page.screenshot(path=SHOTS / "swagger_docs.png", full_page=True)
