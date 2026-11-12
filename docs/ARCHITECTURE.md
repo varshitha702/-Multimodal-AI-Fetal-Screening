@@ -1,7 +1,8 @@
 # Architecture
 
 FetalAI first checks that a 2-D ultrasound image is the standard trans-thalamic plane (Feature A), then
-segments the fetal head and measures head circumference (HC).
+segments the fetal head, measures head circumference (HC) and estimates how reliable that measurement is by
+test-time augmentation (Feature B).
 This document covers the system design, key decisions and the diagrams (architecture, flowchart, UML use-case,
 class and sequence diagrams, DFD levels 0 and 1). Diagrams are Mermaid and render on GitHub.
 
@@ -18,6 +19,9 @@ flowchart LR
     SVC --> PG[ml.planes.PlaneClassifier<br/>plane gate]
     PG --> PM[(Plane checkpoint<br/>outputs/plane_classifier_best.pth)]
     SVC --> INF[ml.inference.Segmenter]
+    SVC --> TTA[ml.uncertainty.tta_predict<br/>8 augmented passes]
+    TTA --> INF
+    TTA --> CAL[(Validation thresholds<br/>outputs/uncertainty_calibration.json)]
     DB --> INF
     INF --> M[(U-Net checkpoint<br/>outputs/hc18_unet_best.pth)]
     INF --> GEO[ml.geometry<br/>ellipse fit + Ramanujan HC]
@@ -67,7 +71,10 @@ Short records are in [`adr/`](adr/).
    FETAL_PLANES_DB returns calibrated plane probabilities; if P(trans-thalamic) is below the validation-chosen
    threshold, the measurement is withheld unless the caller overrides. The gate is optional at runtime
    (`unavailable` if its checkpoint is missing).
-10. **Segmentation quality indicators are heuristics** (confidence, uncertain-boundary fraction, border contact,
+10. **Uncertainty by test-time augmentation** (ADR-0007). Eight augmented passes of the same U-Net, each
+   transform undone before combining, give HC ± SD, an uncertainty map and a "low reliability, re-scan" flag
+   whose thresholds were set on the validation split.
+11. **Segmentation quality indicators are heuristics** (confidence, uncertain-boundary fraction, border contact,
    ellipse-fit ratio), shown as warnings, not as calibrated uncertainty.
 
 ## 3. Flowchart: analysing one image
@@ -109,8 +116,15 @@ flowchart TD
     W2 -- yes --> P
     W2 -- no --> GA{Gestational age given?}
     GA -- yes --> CT[INTERGROWTH-21st z-score and centile]
-    GA -- no --> P
-    CT --> P[Quality flags, overlay + mask PNG]
+    GA -- no --> UQ
+    CT --> UQ
+    UQ{uncertainty = true?} -- yes --> TT[8 TTA passes, undo transforms,<br/>HC SD, CV, disagreement, SD map]
+    TT --> RL{CV or disagreement above<br/>validation threshold?}
+    RL -- yes --> LR[low_reliability = true,<br/>Low reliability, re-scan flag]
+    RL -- no --> P
+    LR --> P
+    UQ -- no --> P
+    P[Quality flags, overlay + mask PNG]
     O --> P
     K --> P
     P --> Q([200 JSON response])
@@ -129,12 +143,13 @@ flowchart LR
       UC3((View segmentation and HC))
       UC4((Review quality warnings))
       UC9((Override plane warning))
+      UC10((View HC +- SD and uncertainty map))
       UC5((Print / download report))
       UC6((View model metrics))
       UC7((Train and evaluate model))
       UC8((Call REST API))
     end
-    R --- UC1 & UC2 & UC3 & UC4 & UC5 & UC6 & UC9
+    R --- UC1 & UC2 & UC3 & UC4 & UC5 & UC6 & UC9 & UC10
     T --- UC7 & UC8
     UC3 -. includes .-> UC0
     UC3 -. includes .-> UC4
@@ -160,8 +175,23 @@ classDiagram
       +ready() bool
       +load()
       +info() ModelInfo
+      +dict uncertainty_calibration
       +plane_check(gray, override) PlaneCheck
-      +predict(gray, pixel_size_mm, ga, override) PredictionResponse
+      +predict(gray, pixel_size_mm, ga, override, uncertainty) PredictionResponse
+    }
+    class TTAResult {
+      +list hc_passes_mm
+      +float hc_mean_mm
+      +float hc_sd_mm
+      +float hc_cv_percent
+      +float disagreement_fraction
+      +ndarray std_map
+    }
+    class Uncertainty {
+      +int n_passes
+      +float hc_sd_mm
+      +bool low_reliability
+      +list reasons
     }
     class PlaneClassifier {
       +float t_plane
@@ -214,6 +244,7 @@ classDiagram
     class PredictionResponse {
       +PlaneCheck plane_check
       +bool measurement_withheld
+      +Uncertainty uncertainty
       +float head_circumference_mm
       +EllipseParams ellipse
       +Quality quality
@@ -234,6 +265,8 @@ classDiagram
     ModelService --> PlaneClassifier
     PlaneClassifier --> PlaneNet
     ModelService ..> PlaneCheck : builds
+    ModelService ..> TTAResult : tta_predict
+    ModelService ..> Uncertainty : builds
     Segmenter --> UNet
     Segmenter ..> Prediction : creates
     Prediction --> EllipseFit
@@ -268,7 +301,12 @@ sequenceDiagram
     SG->>G: resize to original, largest component, fit ellipse
     G-->>SG: EllipseFit (perimeter px)
     SG-->>MS: Prediction (mask, ellipse, HC mm, confidence)
-    MS->>MS: quality flags, overlay PNG, mask PNG (base64)
+    opt uncertainty = true (default)
+      MS->>SG: 8 augmented passes (one batch on GPU), undo each transform
+      SG-->>MS: per-pass HC, SD map, disagreement
+      MS->>MS: compare with validation thresholds, low-reliability flag
+    end
+    MS->>MS: quality flags, overlay PNG, mask PNG, uncertainty PNG (base64)
     MS-->>R: PredictionResponse
     R-->>FE: 200 JSON
     FE-->>User: plane-check badge first, then images, metric cards, warnings, report
@@ -283,7 +321,7 @@ sequenceDiagram
 ```mermaid
 flowchart LR
     U[User] -- "ultrasound image, pixel spacing, GA, override" --> P0(("P0 FetalAI system"))
-    P0 -- "plane check, mask, overlay, HC mm, quality flags, report" --> U
+    P0 -- "plane check, mask, overlay, HC mm +- SD, uncertainty map, reliability, report" --> U
     DS[(HC18 dataset)] -- "images, outlines, reference HC" --> P0
     FPD[(FETAL_PLANES_DB)] -- "images, plane labels, patient IDs" --> P0
     P0 -- "model metrics" --> U
@@ -309,6 +347,8 @@ flowchart LR
     P6(("P6 Present results"))
     P7(("P7 Train, calibrate and<br/>evaluate plane gate"))
     P8(("P8 Check plane"))
+    P9(("P9 TTA uncertainty"))
+    UCAL[(D7 uncertainty thresholds)]
 
     DS -- images, outlines --> P1
     P1 -- group split --> SPL
@@ -328,6 +368,11 @@ flowchart LR
     P4 -- grayscale array --> P5
     CK -- weights --> P5
     P5 -- mask, ellipse, HC, flags --> P6
+    P4 -- grayscale array --> P9
+    CK -- weights --> P9
+    P3 -- validation P90 thresholds --> UCAL
+    UCAL --> P9
+    P9 -- HC SD, uncertainty map, reliability --> P6
     MET -- test metrics --> P6
     P6 -- overlay, metrics, report --> U
 ```
@@ -336,7 +381,7 @@ flowchart LR
 
 ```text
 ml/         masks, metrics, dataset, split, model, train, evaluate, geometry, inference, intergrowth,
-            planes, train_planes, evaluate_planes (Feature A)
+            planes, train_planes, evaluate_planes (Feature A), uncertainty, evaluate_uncertainty (Feature B)
 backend/    FastAPI app: api/ (routes, deps), core/ (config, errors, logging), schemas/, services/
 frontend/   Next.js app: src/app (pages), src/components (+ ui/), src/lib (API client, pixel-size lookup)
 dashboard/  Streamlit research dashboard (uses ml.inference)
