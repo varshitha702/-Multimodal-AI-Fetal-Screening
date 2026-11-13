@@ -221,34 +221,36 @@ intergrowth21.com `grow_fetal-zs_hc_table.pdf`).
 
 | ID | Case | Result |
 |---|---|---|
-| S1 | Home page renders the analyser, upload area, pixel-spacing input and disclaimer | Pass |
-| S2 | `/model` page renders | Pass |
-| S3 | Unknown route returns 404 | Pass |
+| S1 | Landing page renders the pitch, the hero scan, "What we do not claim" and the disclaimer | Pass |
+| S2 | `/scan`, `/ctg`, `/report`, `/evidence` render (upload area and pixel-spacing input on `/scan`) | Pass |
+| S3 | Old `/model` link redirects (307) to `/evidence`; unknown route returns 404 | Pass |
 
 ## End-to-end UI check (`scripts/ui_e2e.py`)
 
-Real Chrome, real backend, trained models on the GPU. Demo image `006_HC.png` is from the held-out test split
+Real Chrome, real backend, trained models on the GPU, against the **production build** of the multi-page UI
+(Overview, Scan, CTG, Report, Evidence). Workspace pages are reached through the in-app links so the shared
+session (scan → CTG → report) is tested as a user would use it. Demo image `006_HC.png` is from the held-out test split
 (reference HC 67.84 mm, an early-gestation image that the plane gate does **not** accept; see `MODEL_CARD.md`).
 
 | ID | Case | Result |
 |---|---|---|
-| E01 | Empty state, disclaimer and "Model ready" status visible | Pass |
-| E02 | Uploading an HC18 image auto-fills its pixel spacing (0.06560565 mm/px) | Pass |
-| E03 | Analyse → plane-check WARN badge shown before the result; HC withheld | Pass |
+| E01 | Landing page: live-scan hero, pipeline, disclaimer, "Model ready" status | Pass |
+| E02 | "Open the workstation" → empty viewport; uploading an HC18 image auto-fills its pixel spacing (0.06560565 mm/px) | Pass |
+| E03 | Analyse → plane-check WARN badge, plane stage of the stage rail marked "warn"; HC withheld | Pass |
 | E04 | "Measure anyway (override)" → HC 67.3 mm vs reference 67.84 mm (asserted within 5 mm), warning kept | Pass |
 | E05 | Print report renders (screenshot + PDF) | Pass |
-| E06 | Dark theme toggles | Pass |
+| E06 | Dark console theme by default; light theme toggles and back | Pass |
 | E07 | Corrupted upload shows the API's 400 message | Pass |
 | E08 | Wrong file type is rejected in the browser | Pass |
-| E09 | Model page shows held-out test metrics (segmentation and plane gate) | Pass |
-| E10 | Mobile (390 px): results render, no horizontal scroll | Pass |
+| E09 | Evidence locker: live segmentation, plane-gate and CTG metrics with figures (tabs) | Pass |
+| E10 | Mobile (390 px): landing and scan results render, no horizontal scroll | Pass |
 | E11 | Gestational age outside 14–40 weeks rejected in the form (Analyse disabled) | Pass |
 | E12 | GA 20+0 (example input; HC18 has no GA) on `544_HC.png` → plane check PASS, centile card (42nd) and chart | Pass |
 | E13 | `544_HC.png`: HC shown as HC ± TTA SD (170.9 ± 1.6 mm), reliability OK | Pass |
-| E14 | Overlay toggle switches to the TTA uncertainty map | Pass |
-| E15 | Screening summary "Routine" from the ultrasound result alone; CTG listed as not assessed | Pass |
-| E16 | Normal CTG example (held-out test) → NORMAL; summary Routine with every input assessed | Pass |
-| E17 | Pathological CTG example → PATHOLOGICAL with SHAP factors; summary escalates to Urgent review (R1); printed report includes it | Pass |
+| E14 | Viewport tab switches to the TTA uncertainty map | Pass |
+| E15 | Report page from the ultrasound result alone: Routine; CTG listed as not assessed | Pass |
+| E16 | CTG page: Normal example (held-out test) → NORMAL; report Routine with every input assessed | Pass |
+| E17 | Pathological example → PATHOLOGICAL with SHAP chart; report escalates to Urgent review, R1 lit in the decision trace, session tray updated; printed report includes it | Pass |
 | E18 | Out-of-range CTG input (LB 400 bpm) rejected in the form | Pass |
 | E19 | `794_HC.png` (held-out test, passes the plane gate): reliability "Low: re-scan" and the quality warning | Pass |
 | E20 | FETAL_PLANES_DB test femur image → plane check WARN ("femur"), HC withheld | Pass |

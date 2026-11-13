@@ -30,7 +30,15 @@ All notable changes are listed here. Format: [Keep a Changelog](https://keepacha
   `ctg_classifier`; UI CTG form with held-out examples, summary card, report section, model-page section;
   T39–T45, C01–C08, F01–F14, E15–E18 (183 total); ADR-0008; `scripts/check_mermaid.py`.
 
+- **New UI ("Sonography Console")**: multi-page app with an animated landing page (live-scan hero, interactive
+  pipeline, held-out metrics, "what we do not claim", team) and workspace pages `/scan` (console viewport,
+  stage rail, findings rail), `/ctg` (grouped inputs, probability gauge, SHAP chart), `/report` (decision
+  trace) and `/evidence` (live metrics and figures per model); shared in-memory session with a header tray;
+  dark console theme by default plus a light report theme; no new npm dependencies. Smoke tests S1–S3 and
+  the end-to-end check E01–E21 rewritten for the new pages; ADR-0009.
+
 ### Changed
+- `/model` now redirects to `/evidence`.
 - Response PNGs are encoded without `optimize` (about 7× faster, about 5 % larger).
 - New runtime dependencies: scikit-learn (< 1.8), scipy, xgboost, shap, xlrd.
 

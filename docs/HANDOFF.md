@@ -77,7 +77,7 @@ Offline: ml/masks → split → train → evaluate · ml/train_planes → evalua
 
 Diagrams (architecture, flowchart, UML use-case / class / two sequence diagrams, DFD 0 and 1; these 8 plus the
 README diagram all render, checked with `scripts/check_mermaid.py`): [`ARCHITECTURE.md`](ARCHITECTURE.md). Decisions:
-[`adr/`](adr/) (8 ADRs).
+[`adr/`](adr/) (9 ADRs).
 
 | Part | Technology |
 |---|---|
@@ -87,7 +87,7 @@ README diagram all render, checked with `scripts/check_mermaid.py`): [`ARCHITECT
 | Training | PyTorch 2.5.1 + CUDA 12.1, AMP, NVIDIA RTX 4050 Laptop 6 GB |
 | Backend | FastAPI, Pydantic 2, pydantic-settings, Uvicorn |
 | Deployment | Docker Compose (python:3.11-slim + CPU torch; node:22-alpine) |
-| Frontend | Next.js 15.5.29, React 19.2.9, TypeScript, Tailwind 3.4, shadcn/ui, lucide, next-themes |
+| Frontend | Next.js 15.5.29, React 19.2.9, TypeScript, Tailwind 3.4, shadcn/ui, lucide, next-themes; 5 pages, "Sonography Console" design (ADR-0009) |
 | Tests / CI | pytest 9, FastAPI TestClient, `node --test`, Playwright + Chrome, ruff, GitHub Actions |
 
 ## 4. Real metrics
@@ -191,15 +191,17 @@ not in the repository); ruff clean; frontend lint + build + smoke passed. UI run
 | `uncertainty_examples.png` | **B:** uncertainty maps from lowest to highest SD |
 | `ctg_confusion.png` | **C:** confusion matrices of the three CTG models |
 | `ctg_shap_pathological.png` | **C:** SHAP summary toward "Pathological" |
-| `ui_upload_empty.png`, `ui_upload_ready.png` | Web app: empty state; image uploaded, pixel spacing auto-filled |
-| `ui_results.png` | Results after override: plane badge, images, HC ± SD, reliability, quality checks |
+| `ui_landing.png`, `ui_landing_full.png`, `ui_mobile_landing.png` | **Landing page:** live-scan hero, pipeline, metrics, limits, team (desktop and 390 px) |
+| `ui_upload_empty.png`, `ui_upload_ready.png` | Scan workstation: empty viewport; image uploaded, pixel spacing auto-filled |
+| `ui_results.png` | Workstation after override: stage rail, viewport, HC ± SD, findings rail |
 | `ui_plane_check_pass.png`, `ui_plane_check_warn.png`, `ui_plane_check_override.png` | **A:** PASS badge; femur image with HC withheld; override |
 | `ui_uncertainty_map.png`, `ui_low_reliability.png` | **B:** uncertainty overlay; "Low: re-scan" case (`794_HC`) |
-| `ui_ctg_result.png`, `ui_screening_summary_urgent.png`, `ui_ctg_and_summary.png` | **C:** CTG result with SHAP; summary escalated to Urgent review; full page |
+| `ui_ctg_result.png`, `ui_ctg_page.png` | **C:** CTG lab: probability gauge and diverging SHAP chart |
+| `ui_report_page.png`, `ui_screening_summary_urgent.png` | **C:** report page: verdict, input tiles, decision trace with R1 lit |
 | `ui_results_centile.png` | GA input: centile card and INTERGROWTH-21st chart |
-| `ui_report_print.png`, `ui_report_centile_print.png`, `ui_report_screening_print.png`, `ui_report_example.pdf` | Printable report (incl. plane check, HC ± SD, CTG and summary) |
-| `ui_results_dark.png`, `ui_mobile.png`, `ui_error_corrupted.png` | Dark theme, 390 px layout, error state |
-| `ui_model_page.png` | Model page: segmentation, plane gate, uncertainty and CTG metrics |
+| `ui_report_print.png`, `ui_report_screening_print.png`, `ui_report_example.pdf` | Printable report (incl. plane check, HC ± SD, CTG and summary) |
+| `ui_results_light.png`, `ui_mobile.png`, `ui_error_corrupted.png` | Light "report paper" theme, 390 px workstation, error state |
+| `ui_evidence.png`, `ui_evidence_plane.png` | Evidence locker: live metrics and figures per model |
 | `swagger_docs.png` | FastAPI Swagger UI (`/docs`) with all endpoints |
 | `test_run_pytest.png` | pytest run from Phase 1 (77 tests; current log: `docs/evidence/pytest_run.txt`) |
 
@@ -274,9 +276,10 @@ ONNX/TensorRT; PostgreSQL history, JWT, audit log; cloud deployment; clinician u
 3. **PASS + centile + uncertainty:** `544_HC.png`, GA 20 + 0 (example; HC18 has no GA) → PASS badge,
    HC 170.9 ± 1.6 mm, 42nd centile, reliability OK; toggle the uncertainty map.
 4. **Low reliability:** `794_HC.png` → PASS badge but "Low: re-scan" (HC 301.4 ± 14.2 mm vs reference 308.5).
-5. **CTG + summary:** on the same page, "Load example: Pathological" → Classify → PATHOLOGICAL with SHAP
-   factors; the summary escalates to **Urgent review (R1)**. Point at the different-patients caveat.
-6. Print report, `/model` page, and the bug story (`mask_bug_before_after.png`).
+5. **CTG + summary:** header → **CTG**, "Pathological" example → Classify → gauge and SHAP chart; header →
+   **Report**: **Urgent review**, R1 lit in the decision trace. Point at the different-patients caveat.
+6. Print report, the **Evidence** page (tabs per model), and the bug story (`mask_bug_before_after.png`).
+   Start the demo on the **Overview** page: the hero replays a real analysis and the pipeline explains each stage.
 
 ## 12. Pull requests
 
