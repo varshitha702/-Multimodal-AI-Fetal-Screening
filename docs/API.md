@@ -186,7 +186,8 @@ low reliability → Review recommended; otherwise Routine. Missing inputs are li
 response:
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/screening/summary -H "Content-Type: application/json"   -d '{"plane_status": "warn", "measurement_withheld": true, "ctg_class": "Suspect", "ctg_probability": 0.9986}'
+curl -X POST http://localhost:8000/api/v1/screening/summary -H "Content-Type: application/json" \
+  -d '{"plane_status": "warn", "measurement_withheld": true, "ctg_class": "Suspect", "ctg_probability": 0.9986}'
 ```
 
 ```json
