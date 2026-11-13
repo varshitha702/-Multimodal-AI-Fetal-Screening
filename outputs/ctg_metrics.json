@@ -1,0 +1,391 @@
+{
+  "split_counts": {
+    "test": {
+      "Normal": 251,
+      "Pathological": 27,
+      "Suspect": 43
+    },
+    "train": {
+      "Normal": 1157,
+      "Pathological": 123,
+      "Suspect": 208
+    },
+    "val": {
+      "Normal": 247,
+      "Pathological": 26,
+      "Suspect": 44
+    }
+  },
+  "imbalance": "balanced class weights from the train split only",
+  "models": {
+    "logistic_regression": {
+      "val": {
+        "n": 317,
+        "accuracy": 0.8864,
+        "macro_f1": 0.8095,
+        "macro_f1_ci95": [
+          0.7449,
+          0.8636
+        ],
+        "roc_auc_macro_ovr": 0.9742,
+        "per_class": {
+          "Normal": {
+            "precision": 0.991,
+            "recall": 0.8907,
+            "f1": 0.9382,
+            "support": 247
+          },
+          "Suspect": {
+            "precision": 0.5915,
+            "recall": 0.9545,
+            "f1": 0.7304,
+            "support": 44
+          },
+          "Pathological": {
+            "precision": 0.7917,
+            "recall": 0.7308,
+            "f1": 0.76,
+            "support": 26
+          }
+        },
+        "pathological_recall": 0.7308,
+        "confusion_matrix": {
+          "labels": [
+            "Normal",
+            "Suspect",
+            "Pathological"
+          ],
+          "rows_true_cols_pred": [
+            [
+              220,
+              24,
+              3
+            ],
+            [
+              0,
+              42,
+              2
+            ],
+            [
+              2,
+              5,
+              19
+            ]
+          ]
+        }
+      },
+      "test": {
+        "n": 321,
+        "accuracy": 0.8567,
+        "macro_f1": 0.778,
+        "macro_f1_ci95": [
+          0.7139,
+          0.8368
+        ],
+        "roc_auc_macro_ovr": 0.9596,
+        "per_class": {
+          "Normal": {
+            "precision": 0.9864,
+            "recall": 0.8645,
+            "f1": 0.9214,
+            "support": 251
+          },
+          "Suspect": {
+            "precision": 0.5,
+            "recall": 0.7907,
+            "f1": 0.6126,
+            "support": 43
+          },
+          "Pathological": {
+            "precision": 0.7273,
+            "recall": 0.8889,
+            "f1": 0.8,
+            "support": 27
+          }
+        },
+        "pathological_recall": 0.8889,
+        "confusion_matrix": {
+          "labels": [
+            "Normal",
+            "Suspect",
+            "Pathological"
+          ],
+          "rows_true_cols_pred": [
+            [
+              217,
+              31,
+              3
+            ],
+            [
+              3,
+              34,
+              6
+            ],
+            [
+              0,
+              3,
+              24
+            ]
+          ]
+        }
+      }
+    },
+    "random_forest": {
+      "val": {
+        "n": 317,
+        "accuracy": 0.9401,
+        "macro_f1": 0.8898,
+        "macro_f1_ci95": [
+          0.8363,
+          0.9394
+        ],
+        "roc_auc_macro_ovr": 0.9884,
+        "per_class": {
+          "Normal": {
+            "precision": 0.9492,
+            "recall": 0.9838,
+            "f1": 0.9662,
+            "support": 247
+          },
+          "Suspect": {
+            "precision": 0.85,
+            "recall": 0.7727,
+            "f1": 0.8095,
+            "support": 44
+          },
+          "Pathological": {
+            "precision": 1.0,
+            "recall": 0.8077,
+            "f1": 0.8936,
+            "support": 26
+          }
+        },
+        "pathological_recall": 0.8077,
+        "confusion_matrix": {
+          "labels": [
+            "Normal",
+            "Suspect",
+            "Pathological"
+          ],
+          "rows_true_cols_pred": [
+            [
+              243,
+              4,
+              0
+            ],
+            [
+              10,
+              34,
+              0
+            ],
+            [
+              3,
+              2,
+              21
+            ]
+          ]
+        }
+      },
+      "test": {
+        "n": 321,
+        "accuracy": 0.9439,
+        "macro_f1": 0.9102,
+        "macro_f1_ci95": [
+          0.8658,
+          0.9489
+        ],
+        "roc_auc_macro_ovr": 0.9875,
+        "per_class": {
+          "Normal": {
+            "precision": 0.9498,
+            "recall": 0.9801,
+            "f1": 0.9647,
+            "support": 251
+          },
+          "Suspect": {
+            "precision": 0.8611,
+            "recall": 0.7209,
+            "f1": 0.7848,
+            "support": 43
+          },
+          "Pathological": {
+            "precision": 1.0,
+            "recall": 0.963,
+            "f1": 0.9811,
+            "support": 27
+          }
+        },
+        "pathological_recall": 0.963,
+        "confusion_matrix": {
+          "labels": [
+            "Normal",
+            "Suspect",
+            "Pathological"
+          ],
+          "rows_true_cols_pred": [
+            [
+              246,
+              5,
+              0
+            ],
+            [
+              12,
+              31,
+              0
+            ],
+            [
+              1,
+              0,
+              26
+            ]
+          ]
+        }
+      }
+    },
+    "xgboost": {
+      "val": {
+        "n": 317,
+        "accuracy": 0.9495,
+        "macro_f1": 0.9176,
+        "macro_f1_ci95": [
+          0.8681,
+          0.9532
+        ],
+        "roc_auc_macro_ovr": 0.9909,
+        "per_class": {
+          "Normal": {
+            "precision": 0.9677,
+            "recall": 0.9717,
+            "f1": 0.9697,
+            "support": 247
+          },
+          "Suspect": {
+            "precision": 0.8261,
+            "recall": 0.8636,
+            "f1": 0.8444,
+            "support": 44
+          },
+          "Pathological": {
+            "precision": 1.0,
+            "recall": 0.8846,
+            "f1": 0.9388,
+            "support": 26
+          }
+        },
+        "pathological_recall": 0.8846,
+        "confusion_matrix": {
+          "labels": [
+            "Normal",
+            "Suspect",
+            "Pathological"
+          ],
+          "rows_true_cols_pred": [
+            [
+              240,
+              7,
+              0
+            ],
+            [
+              6,
+              38,
+              0
+            ],
+            [
+              2,
+              1,
+              23
+            ]
+          ]
+        }
+      },
+      "test": {
+        "n": 321,
+        "accuracy": 0.9751,
+        "macro_f1": 0.963,
+        "macro_f1_ci95": [
+          0.9355,
+          0.9857
+        ],
+        "roc_auc_macro_ovr": 0.9866,
+        "per_class": {
+          "Normal": {
+            "precision": 0.9802,
+            "recall": 0.988,
+            "f1": 0.9841,
+            "support": 251
+          },
+          "Suspect": {
+            "precision": 0.9268,
+            "recall": 0.8837,
+            "f1": 0.9048,
+            "support": 43
+          },
+          "Pathological": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "support": 27
+          }
+        },
+        "pathological_recall": 1.0,
+        "confusion_matrix": {
+          "labels": [
+            "Normal",
+            "Suspect",
+            "Pathological"
+          ],
+          "rows_true_cols_pred": [
+            [
+              248,
+              3,
+              0
+            ],
+            [
+              5,
+              38,
+              0
+            ],
+            [
+              0,
+              0,
+              27
+            ]
+          ]
+        }
+      },
+      "best_iteration": 359
+    }
+  },
+  "shap_mean_abs_test": {
+    "Normal": {
+      "AC": 1.1946,
+      "ASTV": 1.0581,
+      "DP": 0.4246,
+      "UC": 0.3445,
+      "ALTV": 0.3071,
+      "Mode": 0.2597,
+      "MSTV": 0.2476,
+      "Mean": 0.2152
+    },
+    "Suspect": {
+      "ALTV": 0.6811,
+      "AC": 0.6479,
+      "ASTV": 0.3433,
+      "MSTV": 0.3152,
+      "Mode": 0.2732,
+      "Nmax": 0.2678,
+      "Mean": 0.2662,
+      "FM": 0.2558
+    },
+    "Pathological": {
+      "Median": 1.0986,
+      "ASTV": 0.9588,
+      "ALTV": 0.6652,
+      "Mean": 0.6185,
+      "UC": 0.3953,
+      "LB": 0.3863,
+      "DP": 0.338,
+      "Mode": 0.2782
+    }
+  }
+}
