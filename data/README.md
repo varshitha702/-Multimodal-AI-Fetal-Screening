@@ -25,3 +25,7 @@ data/raw/FETAL_PLANES_DB/
 
 `python -m ml.train_planes` caches letterboxed images in `data/processed/` (gitignored) and uses the committed
 split `data/splits/fetal_planes_split.csv`.
+
+UCI Cardiotocography (CTG branch, Feature C): download
+`https://archive.ics.uci.edu/static/public/193/cardiotocography.zip` and extract `CTG.xls` to
+`data/raw/CTG/CTG.xls`. `python -m ml.train_ctg` uses the committed split `data/splits/ctg_split.csv`.

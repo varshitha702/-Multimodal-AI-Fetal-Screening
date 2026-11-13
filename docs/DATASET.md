@@ -123,3 +123,33 @@ shift ±6 %, contrast/brightness/gamma jitter.
 FETAL_PLANES_DB images span 18–40 weeks of gestation (two BCNatal sites, Hospital Clínic and Hospital Sant Joan de Déu, Barcelona; paper, Methods). HC18 (Netherlands) contains
 many **early-gestation** images (reference HC < 100 mm, about ≤ 16 weeks), and every HC18 image has black
 anonymisation boxes. Both affect how often the gate accepts HC18 images (see `docs/MODEL_CARD.md`).
+
+# Part 3: UCI Cardiotocography (CTG branch, Feature C)
+
+## Source
+
+D. Ayres-de-Campos, J. Bernardes, A. Garrido, J. Marques-de-Sá, L. Pereira-Leite, "SisPorto 2.0: a program for
+automated analysis of cardiotocograms", *J Matern Fetal Med* 9(5):311-318, 2000. UCI Machine Learning
+Repository, dataset 193 "Cardiotocography" (CC BY 4.0), file `CTG.xls`. Not committed (`data/raw/` is
+gitignored); download: `https://archive.ics.uci.edu/static/public/193/cardiotocography.zip` into
+`data/raw/CTG/`.
+
+## Contents (verified by `ml/ctg.py` and `tests/test_ctg.py`)
+
+* 2,126 CTG records; NSP labels **Normal 1,655 / Suspect 295 / Pathological 176**, as documented by UCI.
+* The 21 features are read from the **`Data`** sheet, where AC, FM, UC, DL, DS and DP are **per-second rates**
+  (e.g. record CTG0002: 4 accelerations / 627 s = 0.00638). The `Raw Data` sheet holds counts; the loader checks
+  that both sheets are row-aligned (columns `b`, `e`, `NSP`) and uses `SegFile` (CTG0001…) as the record id.
+* No missing values. **10 groups of identical feature vectors (22 records), each group with one label**; they
+  are kept together in one split so no duplicate can leak between train and test.
+
+## Split (`data/splits/ctg_split.csv`, committed)
+
+70/15/15 stratified by NSP, seed 42, by duplicate group: train 1,488, val 317, test 321 (class counts in
+`docs/MODEL_CARD.md`). The UI's "load example" records come from the **test** split.
+
+## Different patients
+
+The CTG records and the ultrasound images (HC18, FETAL_PLANES_DB) come from different hospitals, countries
+and patients. Nothing links a CTG record to an image; the screening summary is therefore rule-based and
+illustrative (see the model card).
