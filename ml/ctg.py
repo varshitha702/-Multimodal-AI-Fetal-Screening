@@ -115,20 +115,26 @@ class CTGResult:
 
 
 class CTGModel:
-    """XGBoost NSP classifier + SHAP TreeExplainer, loaded once."""
+    """XGBoost NSP classifier + SHAP TreeExplainer, loaded once.
+
+    Uses the plain xgboost Booster (no scikit-learn wrapper at inference time: the wrapper of xgboost 2.1 cannot
+    load models under scikit-learn >= 1.8). The saved model is already truncated to the early-stopping best
+    iteration, so predictions and SHAP values come from exactly the same trees.
+    """
 
     def __init__(self, model_path: Path = MODEL_PATH, meta_path: Path = META_PATH):
         import shap
         import xgboost as xgb
 
-        self.model = xgb.XGBClassifier()
-        self.model.load_model(model_path)
+        self._xgb = xgb
+        self.booster = xgb.Booster()
+        self.booster.load_model(model_path)
         self.meta = json.loads(meta_path.read_text()) if meta_path.is_file() else {}
-        self.explainer = shap.TreeExplainer(self.model)
+        self.explainer = shap.TreeExplainer(self.booster)
 
     def predict(self, features: dict[str, float], top_k: int = 5) -> CTGResult:
         x = pd.DataFrame([[float(features[n]) for n in FEATURE_NAMES]], columns=FEATURE_NAMES)
-        proba = self.model.predict_proba(x)[0]
+        proba = self.booster.predict(self._xgb.DMatrix(x))[0]
         k = int(proba.argmax())
         sv = np.asarray(self.explainer.shap_values(x))
         contrib = sv[0, :, k] if sv.ndim == 3 else sv[k][0]   # shap >= 0.45: (n, features, classes)

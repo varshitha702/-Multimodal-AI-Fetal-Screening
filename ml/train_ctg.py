@@ -109,8 +109,9 @@ def main() -> None:
                                                    key=lambda kv: -kv[1])[:8]) for k, c in enumerate(CLASSES)}
     (OUT / "ctg_metrics.json").write_text(json.dumps(metrics, indent=2))
 
-    # --- deploy XGBoost ---
-    xgbm.save_model(MODEL_PATH)
+    # --- deploy XGBoost: truncated to the best iteration, so the plain Booster, its predictions and SHAP all use
+    # exactly the trees selected by early stopping ---
+    xgbm.get_booster()[: xgbm.best_iteration + 1].save_model(MODEL_PATH)
     test_df = df[df.split == "test"].reset_index(drop=True)
     proba = xgbm.predict_proba(xs["test"])
     META_PATH.write_text(json.dumps({
