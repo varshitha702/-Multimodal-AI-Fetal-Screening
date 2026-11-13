@@ -14,11 +14,13 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
+from backend.app.api.v1.ctg_routes import router as ctg_router
 from backend.app.api.v1.routes import router
 from backend.app.core.config import Settings, get_settings
 from backend.app.core.errors import register_exception_handlers
 from backend.app.core.logging import configure_logging
 from backend.app.schemas.prediction import DISCLAIMER
+from backend.app.services.ctg_service import CTGService
 from backend.app.services.model_service import ModelService
 
 log = logging.getLogger("fetalai.api")
@@ -34,13 +36,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         service = ModelService(settings)
         service.load()
         app.state.model_service = service
+        ctg = CTGService(settings)
+        ctg.load()
+        app.state.ctg_service = ctg
         yield
         log.info("shutdown")
 
     app = FastAPI(
         title=settings.app_name,
         version=settings.version,
-        description=f"Fetal head segmentation and head-circumference measurement (HC18 U-Net).\n\n**{DISCLAIMER}**",
+        description=("Standard-plane check, fetal head segmentation and HC measurement with uncertainty (ultrasound), "
+                     "CTG classification with SHAP, and a rule-based screening summary.\n\n"
+                     f"**{DISCLAIMER}**"),
         lifespan=lifespan,
     )
     app.state.settings = settings
@@ -64,6 +71,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     register_exception_handlers(app)
     app.include_router(router)
+    app.include_router(ctg_router)
     return app
 
 
