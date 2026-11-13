@@ -84,11 +84,13 @@ Short records are in [`adr/`](adr/).
 10. **Uncertainty by test-time augmentation** (ADR-0007). Eight augmented passes of the same U-Net, each
    transform undone before combining, give HC ± SD, an uncertainty map and a "low reliability, re-scan" flag
    whose thresholds were set on the validation split.
-11. **CTG branch and rule-based fusion** (ADR-0008). XGBoost on the 21 UCI CTG features (loaded as a plain
+11. **Multi-page "Sonography Console" UI** (ADR-0009): landing page plus Scan, CTG, Report and Evidence pages
+   sharing one in-memory session.
+12. **CTG branch and rule-based fusion** (ADR-0008). XGBoost on the 21 UCI CTG features (loaded as a plain
    Booster truncated to the early-stopping iteration, so predictions and SHAP use the same trees). The
    screening summary is rule-based (a pathological CTG always escalates) because the ultrasound and CTG data
    come from different patients; learned fusion is Phase 2.
-12. **Segmentation quality indicators are heuristics** (confidence, uncertain-boundary fraction, border contact,
+13. **Segmentation quality indicators are heuristics** (confidence, uncertain-boundary fraction, border contact,
    ellipse-fit ratio), shown as warnings, not as calibrated uncertainty.
 
 ## 3. Flowchart: analysing one image
@@ -462,7 +464,8 @@ ml/         masks, metrics, dataset, split, model, train, evaluate, geometry, in
             planes, train_planes, evaluate_planes (Feature A), uncertainty, evaluate_uncertainty (Feature B),
             ctg, train_ctg, fusion (Feature C)
 backend/    FastAPI app: api/ (routes, deps), core/ (config, errors, logging), schemas/, services/
-frontend/   Next.js app: src/app (pages), src/components (+ ui/), src/lib (API client, pixel-size lookup)
+frontend/   Next.js app: src/app (/, /scan, /ctg, /report, /evidence), src/components (landing/, scan/, ctg/,
+            report/, evidence/, ui/), src/lib (API client, shared session, hooks, pixel-size lookup)
 dashboard/  Streamlit research dashboard (uses ml.inference)
 scripts/    dataset check, mask figures, pixel-size export, UI end-to-end check, log renderer, launchers
 tests/      pytest: ML unit tests and backend/ API tests

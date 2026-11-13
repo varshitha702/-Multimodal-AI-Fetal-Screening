@@ -41,8 +41,8 @@ export function UploadDropzone({ file, previewUrl, onFile, onReject, disabled }:
     return (
       <div className="relative overflow-hidden rounded-xl border bg-black">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={previewUrl} alt="Selected ultrasound" className="mx-auto max-h-72 w-full object-contain" />
-        <div className="flex items-center justify-between gap-2 border-t bg-card px-3 py-2 text-sm">
+        <img src={previewUrl} alt="Selected ultrasound" className="mx-auto max-h-40 w-full object-contain" />
+        <div className="flex items-center justify-between gap-2 border-t bg-card px-3 py-2 font-mono text-xs">
           <span className="truncate" title={file.name}>
             {file.name} <span className="text-muted-foreground">· {(file.size / 1024).toFixed(0)} KB</span>
           </span>
@@ -70,16 +70,16 @@ export function UploadDropzone({ file, previewUrl, onFile, onReject, disabled }:
         accept(e.dataTransfer.files);
       }}
       className={cn(
-        "flex w-full flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 py-12 text-center transition-colors",
+        "group flex w-full flex-col items-center justify-center gap-3 rounded-xl border border-dashed bg-[radial-gradient(circle_at_50%_0%,hsl(var(--primary)/0.08),transparent_70%)] px-4 py-8 text-center transition-colors",
         "hover:border-primary/60 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         dragging ? "border-primary bg-primary/10" : "border-muted-foreground/25",
       )}
     >
-      <span className="rounded-full bg-primary/10 p-3 text-primary">
+      <span className="rounded-full border border-primary/30 bg-primary/10 p-3 text-primary transition-transform group-hover:scale-110">
         <ImageUp className="size-6" />
       </span>
-      <span className="font-medium">Drop an ultrasound image here, or click to browse</span>
-      <span className="text-sm text-muted-foreground">PNG or JPEG, up to {MAX_UPLOAD_MB} MB · trans-thalamic head plane</span>
+      <span className="text-sm font-medium">Drop an ultrasound image here, or click to browse</span>
+      <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">PNG / JPEG · ≤ {MAX_UPLOAD_MB} MB · trans-thalamic plane</span>
       <input
         ref={inputRef}
         type="file"

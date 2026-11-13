@@ -1,21 +1,21 @@
-# python scripts/ui_e2e.py  (backend + next start on this laptop, 2026-11-13)
-E01 PASS  empty state, disclaimer and 'Model ready' status visible
-E02 PASS  pixel spacing auto-filled (0.06560565 mm/px)
-E03 PASS  006_HC.png: plane check WARN shown before the result, HC withheld
+# python scripts/ui_e2e.py  (backend + next start production build on this laptop, 2026-11-13)
+E01 PASS  landing page: live-scan hero, pipeline, disclaimer and 'Model ready' status
+E02 PASS  workstation empty state; pixel spacing auto-filled (0.06560565 mm/px)
+E03 PASS  006_HC.png: plane check WARN, stage rail marks the plane stage, HC withheld
 E04 PASS  override: HC 67.3 mm vs reference 67.84 mm, warning kept
 E05 PASS  print report renders (screenshot + PDF)
-E06 PASS  dark theme toggles
+E06 PASS  dark console theme by default; light theme toggles and back
 E07 PASS  corrupted upload shows the API's 400 message
 E08 PASS  wrong file type rejected in the browser
-E09 PASS  model page shows held-out test metrics
-E10 PASS  mobile (390 px): results render, no horizontal scroll
+E09 PASS  evidence locker: live segmentation, plane-gate and CTG metrics with figures
+E10 PASS  mobile (390 px): landing and scan results render, no horizontal scroll
 E11 PASS  GA outside 14-40 weeks rejected in the form (button disabled)
 E12 PASS  GA 20+0 on 544_HC.png: plane check PASS, centile card (42nd) and chart shown
 E13 PASS  544_HC.png: HC shown as HC ± TTA SD (170.9 ± 1.6mm), reliability OK
-E14 PASS  overlay toggle switches to the TTA uncertainty map
-E15 PASS  screening summary Routine from ultrasound alone, CTG listed as not assessed
-E16 PASS  Normal CTG example (held-out test) -> NORMAL; summary Routine with all inputs assessed
-E17 PASS  Pathological CTG example -> PATHOLOGICAL with SHAP factors; summary escalates to Urgent review (R1); printed report includes it
+E14 PASS  viewport tab switches to the TTA uncertainty map
+E15 PASS  report from ultrasound alone: Routine, CTG listed as not assessed
+E16 PASS  Normal CTG example (held-out test) -> NORMAL; report Routine with every input assessed
+E17 PASS  Pathological CTG -> PATHOLOGICAL with SHAP chart; report escalates to Urgent review (R1 lit in the decision trace, session tray updated); printed report includes it
 E18 PASS  out-of-range CTG input (LB 400 bpm) rejected in the form
 E19 PASS  794_HC.png: 'Low: re-scan' reliability and quality warning shown
 E20 PASS  femur image Patient00647_Plane5_1_of_1.png: plane check WARN ('femur'), HC withheld

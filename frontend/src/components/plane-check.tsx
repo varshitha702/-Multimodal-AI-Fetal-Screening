@@ -19,17 +19,17 @@ const STYLE = {
     icon: ShieldCheck,
     label: "PASS",
     title: "Standard plane confirmed",
-    box: "border-emerald-500/40 bg-emerald-500/5",
-    pill: "bg-emerald-600 text-white",
-    iconColor: "text-emerald-600",
+    box: "border-ok/40 bg-ok/[0.06]",
+    pill: "bg-ok text-black",
+    iconColor: "text-ok",
   },
   warn: {
     icon: ShieldAlert,
     label: "WARN",
     title: "Not a confirmed trans-thalamic plane",
-    box: "border-amber-500/50 bg-amber-500/5",
-    pill: "bg-amber-500 text-black",
-    iconColor: "text-amber-500",
+    box: "border-warn/50 bg-warn/[0.06]",
+    pill: "bg-warn text-black",
+    iconColor: "text-warn",
   },
   unavailable: {
     icon: CircleHelp,
@@ -50,7 +50,7 @@ export function PlaneCheckCard({ check, withheld, onOverride, overriding }: Prop
   const scorePct = check.tt_probability !== null ? Math.round(check.tt_probability * 100) : null;
   const thrPct = check.threshold !== null ? Math.round(check.threshold * 100) : null;
   return (
-    <Card className={cn("border-2", s.box)} data-testid="plane-check" data-status={check.status}>
+    <Card className={cn("rounded-2xl border bg-card/70", s.box)} data-testid="plane-check" data-status={check.status}>
       <CardContent className="space-y-3 p-4">
         <div className="flex flex-wrap items-center gap-3">
           <Icon className={cn("size-6 shrink-0", s.iconColor)} aria-hidden />
@@ -74,7 +74,7 @@ export function PlaneCheckCard({ check, withheld, onOverride, overriding }: Prop
             </div>
             <div className="relative h-2 rounded-full bg-muted" aria-hidden>
               <div
-                className={cn("h-2 rounded-full", check.status === "pass" ? "bg-emerald-500" : "bg-amber-500")}
+                className={cn("h-2 rounded-full", check.status === "pass" ? "bg-ok" : "bg-warn")}
                 style={{ width: `${scorePct}%` }}
               />
               <div className="absolute -top-1 h-4 w-0.5 bg-foreground" style={{ left: `${thrPct}%` }} />

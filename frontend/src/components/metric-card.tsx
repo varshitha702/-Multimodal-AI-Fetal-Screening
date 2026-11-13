@@ -1,4 +1,3 @@
-import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -7,19 +6,35 @@ interface Props {
   unit?: string;
   hint?: string;
   highlight?: boolean;
+  tone?: "default" | "ok" | "warn" | "alarm";
 }
 
-export function MetricCard({ label, value, unit, hint, highlight }: Props) {
+const TONE = {
+  default: "",
+  ok: "text-ok",
+  warn: "text-warn",
+  alarm: "text-alarm",
+};
+
+/** Console readout: mono label, display-font value. `data-testid` is derived from the label (used by tests). */
+export function MetricCard({ label, value, unit, hint, highlight, tone = "default" }: Props) {
   return (
-    <Card className={cn(highlight && "border-primary/40 bg-primary/5")}>
-      <CardContent className="p-4">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-        <p className="mt-1 text-xl font-semibold tabular-nums sm:text-2xl" data-testid={`metric-${label.toLowerCase().replace(/\s+/g, "-")}`}>
-          {value}
-          {unit && <span className="ml-1 text-base font-normal text-muted-foreground">{unit}</span>}
-        </p>
-        {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
-      </CardContent>
-    </Card>
+    <div
+      className={cn(
+        "relative overflow-hidden rounded-xl border bg-card/70 p-4",
+        highlight && "border-primary/40 bg-primary/[0.06] glow-ring",
+      )}
+    >
+      {highlight && <span className="absolute left-0 top-0 h-full w-0.5 bg-primary" aria-hidden />}
+      <p className="readout">{label}</p>
+      <p
+        className={cn("mt-1.5 font-display text-xl font-semibold tabular-nums tracking-tight sm:text-2xl", TONE[tone])}
+        data-testid={`metric-${label.toLowerCase().replace(/\s+/g, "-")}`}
+      >
+        {value}
+        {unit && <span className="ml-1 text-sm font-normal text-muted-foreground">{unit}</span>}
+      </p>
+      {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
+    </div>
   );
 }
