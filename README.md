@@ -12,7 +12,7 @@ Pathological (XGBoost + SHAP), and all results are combined into a rule-based **
 > **Academic research prototype, not a medical device.** It is not clinically validated and must not be used
 > for diagnosis, reassurance, triage or pregnancy-care decisions.
 
-![Results screen](docs/screenshots/ui_results.png)
+![FetalAI landing page](docs/screenshots/ui_landing.png)
 
 ## Results (held-out test split, 151 images)
 
@@ -75,9 +75,10 @@ calibrated.
 * **REST API** (FastAPI): `/api/v1/health`, `/api/v1/model-info`, `/api/v1/predict`, `/api/v1/plane-check`,
   `/api/v1/ctg/predict`, `/api/v1/ctg/examples`, `/api/v1/screening/summary`;
   validation with clear 400/413/415/422/503 errors; OpenAPI docs at `/docs`.
-* **Web app** (Next.js + Tailwind + shadcn/ui): drag-and-drop upload, pixel spacing auto-filled for HC18
-  images, original / overlay / mask views, metric cards, quality warnings, printable report, JSON download,
-  model page, light/dark, mobile layout.
+* **Web app** (Next.js 15, "Sonography Console" design, dark and light themes): an animated landing page and four
+  workspace pages: **Scan** (console viewport, stage rail, findings rail), **CTG** (grouped inputs, probability
+  gauge, SHAP chart), **Report** (decision trace with the fired rules lit) and **Evidence** (live metrics and
+  figures per model). One shared session carries results across pages; printable report; mobile layout.
 * **HC-for-gestational-age centile** (optional GA input) from the INTERGROWTH-21st fetal standard
   (Papageorghiou et al., *Lancet* 2014), verified against every cell of the official published table, with a
   centile chart. A comparison with a population standard, not a diagnosis.
@@ -161,21 +162,16 @@ check as unavailable.
 
 | | |
 |---|---|
-| Upload | ![](docs/screenshots/ui_upload_ready.png) |
-| Plane check: PASS | ![](docs/screenshots/ui_plane_check_pass.png) |
+| Landing page | ![](docs/screenshots/ui_landing.png) |
+| Scan workstation (PASS, HC ± SD, centile) | ![](docs/screenshots/ui_results_centile.png) |
 | Plane check: WARN (femur image, HC withheld) | ![](docs/screenshots/ui_plane_check_warn.png) |
-| Plane check: overridden | ![](docs/screenshots/ui_plane_check_override.png) |
 | Low reliability, re-scan (uncertainty map) | ![](docs/screenshots/ui_low_reliability.png) |
-| CTG result with SHAP factors | ![](docs/screenshots/ui_ctg_result.png) |
-| Screening summary (pathological CTG → Urgent review) | ![](docs/screenshots/ui_screening_summary_urgent.png) |
-| CTG confusion matrices (3 models) | ![](docs/screenshots/ctg_confusion.png) |
-| TTA SD vs actual HC error | ![](docs/screenshots/uncertainty_vs_error.png) |
-| Plane classifier confusion matrices | ![](docs/screenshots/plane_confusion.png) |
-| Calibration before / after | ![](docs/screenshots/plane_reliability.png) |
-| Results (dark) | ![](docs/screenshots/ui_results_dark.png) |
-| GA centile | ![](docs/screenshots/ui_results_centile.png) |
-| Printable report | ![](docs/screenshots/ui_report_print.png) |
-| Model page | ![](docs/screenshots/ui_model_page.png) |
+| CTG lab (gauge + SHAP chart) | ![](docs/screenshots/ui_ctg_page.png) |
+| Report: decision trace, Urgent review | ![](docs/screenshots/ui_report_page.png) |
+| Evidence locker | ![](docs/screenshots/ui_evidence_plane.png) |
+| Light theme | ![](docs/screenshots/ui_results_light.png) |
+| Printable report | ![](docs/screenshots/ui_report_screening_print.png) |
+| Mobile | ![](docs/screenshots/ui_mobile_landing.png) |
 | API docs | ![](docs/screenshots/swagger_docs.png) |
 | Training curves | ![](docs/screenshots/training_curves.png) |
 | Bug found: empty masks (before / after) | ![](docs/screenshots/mask_bug_before_after.png) |
