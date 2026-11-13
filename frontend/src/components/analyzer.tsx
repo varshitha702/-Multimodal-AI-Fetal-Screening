@@ -3,8 +3,10 @@
 import { AlertCircle, Loader2, ScanSearch, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { CtgPanel } from "@/components/ctg-panel";
 import { PrintReport } from "@/components/print-report";
 import { ResultsPanel } from "@/components/results-panel";
+import { ScreeningSummaryCard } from "@/components/screening-summary";
 import { UploadDropzone } from "@/components/upload-dropzone";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +15,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ApiError, predict, type Prediction } from "@/lib/api";
+import {
+  ApiError,
+  getScreeningSummary,
+  predict,
+  screeningRequest,
+  type CtgPrediction,
+  type Prediction,
+  type ScreeningSummary,
+} from "@/lib/api";
 import { lookupPixelSize, type PixelSizeMatch } from "@/lib/pixel-size";
 
 type Status = "idle" | "loading" | "done" | "error";
@@ -34,9 +44,27 @@ export function Analyzer() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Prediction | null>(null);
   const [overriding, setOverriding] = useState(false);
+  const [ctg, setCtg] = useState<CtgPrediction | null>(null);
+  const [summary, setSummary] = useState<ScreeningSummary | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => () => abortRef.current?.abort(), []);
+
+  // Combined screening summary from whatever results exist (ultrasound, CTG or both).
+  useEffect(() => {
+    const us = status === "done" ? result : null;
+    if (!us && !ctg) {
+      setSummary(null);
+      return;
+    }
+    let cancelled = false;
+    getScreeningSummary(screeningRequest(us, ctg))
+      .then((s) => !cancelled && setSummary(s))
+      .catch(() => !cancelled && setSummary(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [result, ctg, status]);
 
   const selectFile = useCallback(async (f: File | null) => {
     abortRef.current?.abort();
@@ -213,8 +241,13 @@ export function Analyzer() {
         </section>
       </div>
 
+      <div className="mt-6 space-y-6 print:hidden">
+        {summary && <ScreeningSummaryCard summary={summary} />}
+        <CtgPanel result={ctg} onResult={setCtg} />
+      </div>
+
       {status === "done" && result && previewUrl && file && (
-        <PrintReport result={result} originalUrl={previewUrl} fileName={file.name} />
+        <PrintReport result={result} originalUrl={previewUrl} fileName={file.name} ctg={ctg} summary={summary} />
       )}
     </>
   );

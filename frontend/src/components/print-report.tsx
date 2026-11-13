@@ -1,13 +1,15 @@
-import { dataUrl, formatGa, type Prediction } from "@/lib/api";
+import { dataUrl, formatGa, type CtgPrediction, type Prediction, type ScreeningSummary } from "@/lib/api";
 
 interface Props {
   result: Prediction;
   originalUrl: string;
   fileName: string;
+  ctg?: CtgPrediction | null;
+  summary?: ScreeningSummary | null;
 }
 
 /** Report layout that is only visible when printing (Ctrl+P / "Print report" -> Save as PDF). */
-export function PrintReport({ result, originalUrl, fileName }: Props) {
+export function PrintReport({ result, originalUrl, fileName, ctg, summary }: Props) {
   const e = result.ellipse;
   const rows: [string, string][] = [
     ["Image", `${fileName} (${result.image_width} × ${result.image_height} px)`],
@@ -85,6 +87,33 @@ export function PrintReport({ result, originalUrl, fileName }: Props) {
             ))}
           </ul>
         </>
+      )}
+      {ctg && (
+        <>
+          <h2 className="font-semibold">CTG</h2>
+          <p className="mb-2 text-sm">
+            {ctg.predicted_class} (Normal {(ctg.probabilities.Normal * 100).toFixed(1)}%, Suspect{" "}
+            {(ctg.probabilities.Suspect * 100).toFixed(1)}%, Pathological{" "}
+            {(ctg.probabilities.Pathological * 100).toFixed(1)}%). Top factors:{" "}
+            {ctg.top_factors
+              .slice(0, 3)
+              .map((f) => `${f.feature} = ${f.value} (${f.shap > 0 ? "+" : ""}${f.shap.toFixed(2)})`)
+              .join(", ")}
+            .
+          </p>
+        </>
+      )}
+      {summary && (
+        <div className="mb-4 border-2 border-black p-2 text-sm" data-testid="print-summary">
+          <p className="font-bold">Screening summary: {summary.level}</p>
+          {summary.drivers.map((d) => (
+            <p key={d.rule + d.input}>
+              {d.input}: {d.finding} ({d.rule})
+            </p>
+          ))}
+          {summary.not_assessed.length > 0 && <p>Not assessed: {summary.not_assessed.join("; ")}.</p>}
+          <p className="mt-1 text-xs">{summary.caveats[0]}</p>
+        </div>
       )}
       <p className="text-xs">
         Method: U-Net segmentation, ellipse fit, perimeter by Ramanujan&apos;s approximation × pixel spacing. Trained on
