@@ -119,6 +119,7 @@ export interface ModelInfo {
   intended_use: string;
   plane_classifier: Record<string, unknown> | null;
   uncertainty: Record<string, unknown> | null;
+  ctg_classifier: Record<string, unknown> | null;
   disclaimer: string;
 }
 
@@ -188,3 +189,89 @@ export function formatGa(weeks: number) {
 }
 
 export const dataUrl = (b64: string) => `data:image/png;base64,${b64}`;
+
+// --- CTG branch and screening summary (Feature C) -------------------------------------------------
+
+export type CtgClass = "Normal" | "Suspect" | "Pathological";
+
+export interface CtgFactor {
+  feature: string;
+  description: string;
+  unit: string;
+  value: number;
+  shap: number;
+  direction: "towards" | "away from";
+}
+
+export interface CtgPrediction {
+  predicted_class: CtgClass;
+  probabilities: Record<CtgClass, number>;
+  top_factors: CtgFactor[];
+  model_version: string;
+  note: string;
+  disclaimer: string;
+}
+
+export interface CtgExample {
+  record: string;
+  label: CtgClass;
+  split: string;
+  features: Record<string, number>;
+}
+
+export interface ScreeningRequest {
+  plane_status?: "pass" | "warn" | "unavailable" | null;
+  plane_overridden?: boolean;
+  measurement_withheld?: boolean;
+  hc_mm?: number | null;
+  hc_z_score?: number | null;
+  hc_centile?: number | null;
+  low_reliability?: boolean | null;
+  ctg_class?: CtgClass | null;
+  ctg_probability?: number | null;
+}
+
+export interface ScreeningDriver {
+  input: string;
+  finding: string;
+  level: string;
+  rule: string;
+}
+
+export interface ScreeningSummary {
+  level: "Routine" | "Review recommended" | "Urgent review" | "Insufficient data";
+  drivers: ScreeningDriver[];
+  unremarkable: ScreeningDriver[];
+  not_assessed: string[];
+  rules_version: string;
+  rules: string[];
+  caveats: string[];
+  disclaimer: string;
+}
+
+const json = (body: unknown): RequestInit => ({
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(body),
+});
+
+export const getCtgExamples = () => request<CtgExample[]>("/api/v1/ctg/examples");
+export const predictCtg = (features: Record<string, number>) =>
+  request<CtgPrediction>("/api/v1/ctg/predict", json(features));
+export const getScreeningSummary = (req: ScreeningRequest) =>
+  request<ScreeningSummary>("/api/v1/screening/summary", json(req));
+
+/** Build the summary request from whatever results exist (missing inputs are reported as "not assessed"). */
+export function screeningRequest(us: Prediction | null, ctg: CtgPrediction | null): ScreeningRequest {
+  return {
+    plane_status: us?.plane_check.status ?? null,
+    plane_overridden: us?.plane_check.overridden ?? false,
+    measurement_withheld: us?.measurement_withheld ?? false,
+    hc_mm: us?.head_circumference_mm ?? null,
+    hc_z_score: us?.growth?.z_score ?? null,
+    hc_centile: us?.growth?.centile ?? null,
+    low_reliability: us?.uncertainty ? us.uncertainty.low_reliability : null,
+    ctg_class: ctg?.predicted_class ?? null,
+    ctg_probability: ctg ? ctg.probabilities[ctg.predicted_class] : null,
+  };
+}

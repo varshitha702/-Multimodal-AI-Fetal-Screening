@@ -6,7 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from fastapi.concurrency import run_in_threadpool
 
-from backend.app.api.deps import get_model_service, get_settings_dep, require_model
+from backend.app.api.deps import get_ctg_service, get_model_service, get_settings_dep, require_model
 from backend.app.core.config import Settings
 from backend.app.schemas.prediction import (
     CentileCurves,
@@ -17,6 +17,7 @@ from backend.app.schemas.prediction import (
     PredictionResponse,
 )
 from backend.app.services import image_service
+from backend.app.services.ctg_service import CTGService
 from backend.app.services.model_service import ModelService
 from ml import intergrowth
 
@@ -33,16 +34,19 @@ ERRORS = {
 
 @router.get("/health", response_model=HealthResponse, tags=["system"])
 def health(service: Annotated[ModelService, Depends(get_model_service)],
+           ctg: Annotated[CTGService, Depends(get_ctg_service)],
            settings: Annotated[Settings, Depends(get_settings_dep)]) -> HealthResponse:
     """Liveness and readiness: ``degraded`` means the API is up but the model is not loaded."""
     return HealthResponse(status="ok" if service.ready else "degraded", model_loaded=service.ready,
-                          plane_model_loaded=service.planes is not None, version=settings.version)
+                          plane_model_loaded=service.planes is not None, ctg_model_loaded=ctg.ready,
+                          version=settings.version)
 
 
 @router.get("/model-info", response_model=ModelInfo, tags=["model"], responses={503: ERRORS[503]})
-def model_info(service: Annotated[ModelService, Depends(require_model)]) -> ModelInfo:
-    """Model architecture, checkpoint details and held-out test metrics."""
-    return service.info()
+def model_info(service: Annotated[ModelService, Depends(require_model)],
+               ctg: Annotated[CTGService, Depends(get_ctg_service)]) -> ModelInfo:
+    """Model architecture, checkpoint details and held-out test metrics (segmentation, plane gate, TTA, CTG)."""
+    return service.info().model_copy(update={"ctg_classifier": ctg.info()})
 
 
 @router.post("/predict", response_model=PredictionResponse, tags=["model"], responses=ERRORS)

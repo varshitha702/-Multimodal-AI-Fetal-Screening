@@ -6,7 +6,8 @@ B.Tech Major Project, REVA University. FetalAI first **checks that the ultrasoun
 trans-thalamic plane** (a calibrated plane classifier), then segments the fetal head with a U-Net, fits an
 ellipse to it and reports the **head circumference (HC) in millimetres**, through a FastAPI backend and a
 Next.js web app. Each HC comes with an **uncertainty (HC ± SD) from test-time augmentation** and a
-"low reliability, re-scan" flag.
+"low reliability, re-scan" flag. A second modality, a **CTG record**, is classified as Normal / Suspect /
+Pathological (XGBoost + SHAP), and all results are combined into a rule-based **screening summary**.
 
 > **Academic research prototype, not a medical device.** It is not clinically validated and must not be used
 > for diagnosis, reassurance, triage or pregnancy-care decisions.
@@ -44,6 +45,18 @@ training and test. Details and limitations: [`docs/MODEL_CARD.md`](docs/MODEL_CA
 | MAE of flagged vs unflagged images | **3.68 mm vs 1.99 mm** |
 | Extra latency (Docker CPU backend) | about +0.8 s per request (`uncertainty=false` to skip) |
 
+### CTG classifier (UCI Cardiotocography, held-out test split, n = 321)
+
+| Model | Macro-F1 (95 % CI) | ROC-AUC | Pathological recall |
+|---|---|---|---|
+| **XGBoost (deployed)** | **0.963** (0.936–0.986) | 0.987 | **27 / 27** (Wilson CI 0.875–1.000) |
+| Random forest | 0.910 | 0.988 | 0.963 |
+| Logistic regression | 0.778 | 0.960 | 0.889 |
+
+The CTG and ultrasound datasets come from **different patients**, so the screening summary (Routine / Review
+recommended / Urgent review; a pathological CTG always escalates) is rule-based and illustrative, not
+calibrated.
+
 ## Features
 
 * **Standard-plane quality gate** (Feature A): an EfficientNet-B0 with a plane head and a brain sub-plane head,
@@ -53,8 +66,14 @@ training and test. Details and limitations: [`docs/MODEL_CARD.md`](docs/MODEL_CA
 * **Measurement uncertainty** (Feature B): 8 test-time-augmented passes (flip, zoom, gamma), each undone before
   combining, give HC ± SD, a per-pixel uncertainty map (overlay toggle in the UI) and a "low reliability,
   re-scan" flag with thresholds chosen on the validation split.
+* **CTG branch** (Feature C): XGBoost on the 21 SisPorto features (compared with logistic regression and random
+  forest, class weights from train only), SHAP top factors per prediction, a CTG form with held-out "load
+  example" records.
+* **Screening summary** (Feature C): documented rules R1–R6 combine the plane check, HC centile, HC
+  reliability and CTG class; lists what drove the level and what was not assessed.
 * **Segmentation + measurement:** U-Net → largest component → ellipse fit → Ramanujan perimeter × pixel spacing.
-* **REST API** (FastAPI): `/api/v1/health`, `/api/v1/model-info`, `/api/v1/predict`, `/api/v1/plane-check`;
+* **REST API** (FastAPI): `/api/v1/health`, `/api/v1/model-info`, `/api/v1/predict`, `/api/v1/plane-check`,
+  `/api/v1/ctg/predict`, `/api/v1/ctg/examples`, `/api/v1/screening/summary`;
   validation with clear 400/413/415/422/503 errors; OpenAPI docs at `/docs`.
 * **Web app** (Next.js + Tailwind + shadcn/ui): drag-and-drop upload, pixel spacing auto-filled for HC18
   images, original / overlay / mask views, metric cards, quality warnings, printable report, JSON download,
@@ -63,7 +82,7 @@ training and test. Details and limitations: [`docs/MODEL_CARD.md`](docs/MODEL_CA
   (Papageorghiou et al., *Lancet* 2014), verified against every cell of the official published table, with a
   centile chart. A comparison with a population standard, not a diagnosis.
 * **Research dashboard** (Streamlit) using the same inference code.
-* **Reproducible pipeline:** fixed-seed splits, GPU training, evaluation scripts, 137 automated tests, CI.
+* **Reproducible pipeline:** fixed-seed splits, GPU training, evaluation scripts, 183 automated tests, CI.
 
 ## Architecture
 
@@ -74,6 +93,8 @@ flowchart LR
     API --> PG[ml.planes.PlaneClassifier<br/>plane gate]
     PG --> PM[(Plane checkpoint)]
     API --> INF[ml.inference.Segmenter]
+    API --> CTG[ml.ctg.CTGModel<br/>XGBoost + SHAP]
+    API --> FUS[ml.fusion<br/>screening summary]
     DB[Streamlit dashboard] --> INF
     INF --> M[(U-Net checkpoint)]
     INF --> GEO[Ellipse fit + HC mm]
@@ -106,6 +127,10 @@ python -m ml.evaluate_planes
 
 # 3c. TTA uncertainty: thresholds on validation, evaluation on test (writes outputs/uncertainty_*.json)
 python -m ml.evaluate_uncertainty
+
+# 3d. CTG: download UCI Cardiotocography (CTG.xls) into data/raw/CTG, then (under a minute; the trained
+#     model outputs/ctg_xgb.json is committed, so this step is optional)
+python -m ml.train_ctg
 
 # 4. Backend on http://localhost:8000 (docs at /docs)
 scripts\run_backend.bat
@@ -141,6 +166,9 @@ check as unavailable.
 | Plane check: WARN (femur image, HC withheld) | ![](docs/screenshots/ui_plane_check_warn.png) |
 | Plane check: overridden | ![](docs/screenshots/ui_plane_check_override.png) |
 | Low reliability, re-scan (uncertainty map) | ![](docs/screenshots/ui_low_reliability.png) |
+| CTG result with SHAP factors | ![](docs/screenshots/ui_ctg_result.png) |
+| Screening summary (pathological CTG → Urgent review) | ![](docs/screenshots/ui_screening_summary_urgent.png) |
+| CTG confusion matrices (3 models) | ![](docs/screenshots/ctg_confusion.png) |
 | TTA SD vs actual HC error | ![](docs/screenshots/uncertainty_vs_error.png) |
 | Plane classifier confusion matrices | ![](docs/screenshots/plane_confusion.png) |
 | Calibration before / after | ![](docs/screenshots/plane_reliability.png) |

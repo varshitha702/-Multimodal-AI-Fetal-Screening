@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     # Standard-plane quality gate (FETAL_PLANES_DB classifier). If the file is missing the API still works and
     # every response says the plane check was unavailable.
     plane_checkpoint_path: Path = REPO_ROOT / "outputs" / "plane_classifier_best.pth"
+    # CTG NSP classifier (XGBoost, committed); the CTG endpoints return 503 if it is missing.
+    ctg_model_path: Path = REPO_ROOT / "outputs" / "ctg_xgb.json"
     device: str | None = Field(default=None, description="'cuda', 'cpu' or None for automatic")
     max_upload_mb: float = 10.0
     min_image_side: int = 64

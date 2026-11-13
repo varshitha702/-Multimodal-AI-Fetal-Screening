@@ -162,6 +162,62 @@ function UncertaintySection({ u }: { u: UncertaintyInfo | null }) {
   );
 }
 
+interface CtgInfo {
+  model: string;
+  best_iteration: number;
+  data: string;
+  test: {
+    n: number;
+    accuracy: number;
+    macro_f1: number;
+    macro_f1_ci95: [number, number];
+    roc_auc_macro_ovr: number;
+    pathological_recall: number;
+  };
+  comparison_test_macro_f1?: Record<string, number>;
+}
+
+function CtgSection({ c }: { c: CtgInfo | null }) {
+  if (!c) return null;
+  const t = c.test;
+  return (
+    <Card data-testid="ctg-info">
+      <CardHeader>
+        <CardTitle className="text-base">CTG classifier (NSP: Normal / Suspect / Pathological)</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <MetricCard
+            label="CTG macro-F1"
+            value={t.macro_f1.toFixed(3)}
+            hint={`95% CI ${t.macro_f1_ci95[0].toFixed(3)}–${t.macro_f1_ci95[1].toFixed(3)} · n=${t.n}`}
+            highlight
+          />
+          <MetricCard label="CTG accuracy" value={pct(t.accuracy)} hint="held-out test split" />
+          <MetricCard label="ROC-AUC" value={t.roc_auc_macro_ovr.toFixed(3)} hint="macro, one-vs-rest" />
+          <MetricCard label="Pathological recall" value={pct(t.pathological_recall)} hint="few cases: see model card" />
+        </div>
+        <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
+          <Row term="Model" value={`${c.model} (best iteration ${c.best_iteration})`} />
+          <Row term="Training data" value={c.data} />
+          {c.comparison_test_macro_f1 && (
+            <Row
+              term="Test macro-F1 comparison"
+              value={Object.entries(c.comparison_test_macro_f1)
+                .map(([k, v]) => `${k.replace("_", " ")} ${v.toFixed(3)}`)
+                .join(" · ")}
+            />
+          )}
+          <Row
+            term="Fusion"
+            value="Rule-based screening summary; the CTG and ultrasound data come from different patients, so it is illustrative and uncalibrated."
+          />
+        </dl>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function ModelInfoView() {
   const [info, setInfo] = useState<ModelInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -254,6 +310,8 @@ export function ModelInfoView() {
       <PlaneGateSection p={info.plane_classifier as PlaneInfo | null} />
 
       <UncertaintySection u={info.uncertainty as UncertaintyInfo | null} />
+
+      <CtgSection c={info.ctg_classifier as CtgInfo | null} />
 
       <Alert variant="warning">
         <AlertCircle className="size-4" />

@@ -23,6 +23,7 @@ COPY backend backend
 COPY outputs/test_metrics.json outputs/test_metrics.json
 COPY outputs/plane_metrics.json outputs/plane_metrics.json
 COPY outputs/uncertainty_calibration.json outputs/uncertainty_metrics.json outputs/
+COPY outputs/ctg_xgb.json outputs/ctg_model_meta.json outputs/ctg_metrics.json outputs/ctg_examples.json outputs/
 
 RUN useradd --create-home --uid 10001 app
 USER app

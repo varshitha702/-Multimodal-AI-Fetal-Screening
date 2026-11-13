@@ -2,7 +2,8 @@
 
 FetalAI first checks that a 2-D ultrasound image is the standard trans-thalamic plane (Feature A), then
 segments the fetal head, measures head circumference (HC) and estimates how reliable that measurement is by
-test-time augmentation (Feature B).
+test-time augmentation (Feature B). A second modality, a CTG record, is classified by an XGBoost model with SHAP
+explanations, and all outputs are combined into a rule-based screening summary (Feature C).
 This document covers the system design, key decisions and the diagrams (architecture, flowchart, UML use-case,
 class and sequence diagrams, DFD levels 0 and 1). Diagrams are Mermaid and render on GitHub.
 
@@ -22,6 +23,10 @@ flowchart LR
     SVC --> TTA[ml.uncertainty.tta_predict<br/>8 augmented passes]
     TTA --> INF
     TTA --> CAL[(Validation thresholds<br/>outputs/uncertainty_calibration.json)]
+    API --> CTGS[ctg_service]
+    CTGS --> CTGM[ml.ctg.CTGModel<br/>XGBoost Booster + SHAP]
+    CTGM --> CK2[(CTG model<br/>outputs/ctg_xgb.json)]
+    CTGS --> FUS[ml.fusion.summarize<br/>rules R1-R6]
     DB --> INF
     INF --> M[(U-Net checkpoint<br/>outputs/hc18_unet_best.pth)]
     INF --> GEO[ml.geometry<br/>ellipse fit + Ramanujan HC]
@@ -37,12 +42,17 @@ flowchart LR
       TP --> PM
       PM --> EP[evaluate_planes.py<br/>official test, ECE, HC18 acceptance]
     end
+    subgraph Offline CTG pipeline - ml/
+      CD[(UCI CTG.xls<br/>data/raw/CTG)] --> TC[train_ctg.py<br/>stratified split, LR / RF / XGBoost,<br/>balanced weights from train, SHAP]
+      TC --> CK2
+    end
 ```
 
 | Layer | Technology | Owner |
 |---|---|---|
 | Data pipeline | Python, OpenCV, pandas | Pujari Varshitha |
 | Model training and evaluation | PyTorch 2.5 (CUDA 12.1), U-Net, EfficientNet-B0 plane classifier | Nachiketha K G |
+| CTG model and tests | scikit-learn, XGBoost, SHAP | Yashwanth Gowda M N |
 | Backend API and integration | FastAPI, Pydantic v2, Uvicorn | Vishwas K |
 | Frontend | Next.js 15, TypeScript, Tailwind, shadcn/ui | Rakshitha V |
 | Requirements, design docs, testing | pytest, Playwright, GitHub Actions | Yashwanth Gowda M N |
@@ -74,7 +84,11 @@ Short records are in [`adr/`](adr/).
 10. **Uncertainty by test-time augmentation** (ADR-0007). Eight augmented passes of the same U-Net, each
    transform undone before combining, give HC ± SD, an uncertainty map and a "low reliability, re-scan" flag
    whose thresholds were set on the validation split.
-11. **Segmentation quality indicators are heuristics** (confidence, uncertain-boundary fraction, border contact,
+11. **CTG branch and rule-based fusion** (ADR-0008). XGBoost on the 21 UCI CTG features (loaded as a plain
+   Booster truncated to the early-stopping iteration, so predictions and SHAP use the same trees). The
+   screening summary is rule-based (a pathological CTG always escalates) because the ultrasound and CTG data
+   come from different patients; learned fusion is Phase 2.
+12. **Segmentation quality indicators are heuristics** (confidence, uncertain-boundary fraction, border contact,
    ellipse-fit ratio), shown as warnings, not as calibrated uncertainty.
 
 ## 3. Flowchart: analysing one image
@@ -144,16 +158,21 @@ flowchart LR
       UC4((Review quality warnings))
       UC9((Override plane warning))
       UC10((View HC +- SD and uncertainty map))
+      UC11((Enter or load a CTG record))
+      UC12((View CTG class and SHAP factors))
+      UC13((View combined screening summary))
       UC5((Print / download report))
       UC6((View model metrics))
       UC7((Train and evaluate model))
       UC8((Call REST API))
     end
-    R --- UC1 & UC2 & UC3 & UC4 & UC5 & UC6 & UC9 & UC10
+    R --- UC1 & UC2 & UC3 & UC4 & UC5 & UC6 & UC9 & UC10 & UC11 & UC12 & UC13
     T --- UC7 & UC8
     UC3 -. includes .-> UC0
     UC3 -. includes .-> UC4
     UC9 -. extends .-> UC0
+    UC12 -. includes .-> UC11
+    UC13 -. includes .-> UC3
 ```
 
 ## 5. UML: class diagram (backend and ML core)
@@ -251,6 +270,24 @@ classDiagram
       +str mask_png_base64
       +str overlay_png_base64
     }
+    class CTGService {
+      +CTGModel model
+      +load()
+      +predict(features) CTGPrediction
+      +examples() list
+      +summary(request) ScreeningSummaryResponse
+    }
+    class CTGModel {
+      +Booster booster
+      +TreeExplainer explainer
+      +predict(features, top_k) CTGResult
+    }
+    class ScreeningSummary {
+      +str level
+      +list drivers
+      +list not_assessed
+      +list caveats
+    }
     class APIError {
       +int status_code
       +str code
@@ -271,6 +308,8 @@ classDiagram
     Segmenter ..> Prediction : creates
     Prediction --> EllipseFit
     ModelService ..> PredictionResponse : builds
+    CTGService --> CTGModel
+    CTGService ..> ScreeningSummary : summarize()
 ```
 
 ## 6. UML: sequence diagram for `POST /api/v1/predict`
@@ -316,14 +355,40 @@ sequenceDiagram
     end
 ```
 
+### Sequence: CTG record and screening summary
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant FE as Next.js frontend
+    participant CR as ctg_routes
+    participant CS as CTGService
+    participant CM as CTGModel (XGBoost + SHAP)
+    participant FU as ml.fusion
+    User->>FE: Load example (held-out test record) or type 21 features
+    FE->>CR: GET /api/v1/ctg/examples
+    FE->>CR: POST /api/v1/ctg/predict (JSON)
+    CR->>CR: Pydantic validation (422 on bad input), require_ctg (503)
+    CR->>CS: predict(features)
+    CS->>CM: booster.predict, TreeExplainer.shap_values
+    CM-->>CS: class probabilities, top-5 SHAP factors
+    CS-->>FE: CTGPrediction
+    FE->>CR: POST /api/v1/screening/summary (plane status, HC z, reliability, CTG class)
+    CR->>FU: summarize(rules R1-R6)
+    FU-->>CR: level, drivers, not assessed, caveats
+    CR-->>FE: ScreeningSummaryResponse
+    FE-->>User: CTG card, summary card (also in the printed report)
+```
+
 ## 7. Data-flow diagram, level 0 (context)
 
 ```mermaid
 flowchart LR
-    U[User] -- "ultrasound image, pixel spacing, GA, override" --> P0(("P0 FetalAI system"))
-    P0 -- "plane check, mask, overlay, HC mm +- SD, uncertainty map, reliability, report" --> U
+    U[User] -- "ultrasound image, pixel spacing, GA, override, CTG features" --> P0(("P0 FetalAI system"))
+    P0 -- "plane check, mask, overlay, HC mm +- SD, uncertainty map, reliability, CTG class, SHAP, summary, report" --> U
     DS[(HC18 dataset)] -- "images, outlines, reference HC" --> P0
     FPD[(FETAL_PLANES_DB)] -- "images, plane labels, patient IDs" --> P0
+    CTGD[(UCI Cardiotocography)] -- "21 features, NSP labels" --> P0
     P0 -- "model metrics" --> U
 ```
 
@@ -349,6 +414,11 @@ flowchart LR
     P8(("P8 Check plane"))
     P9(("P9 TTA uncertainty"))
     UCAL[(D7 uncertainty thresholds)]
+    CTGD[(D8 UCI CTG dataset)]
+    CTGK[(D9 CTG model)]
+    P10(("P10 Train and evaluate<br/>CTG models"))
+    P11(("P11 Classify CTG + SHAP"))
+    P12(("P12 Screening summary<br/>rules R1-R6"))
 
     DS -- images, outlines --> P1
     P1 -- group split --> SPL
@@ -373,6 +443,14 @@ flowchart LR
     P3 -- validation P90 thresholds --> UCAL
     UCAL --> P9
     P9 -- HC SD, uncertainty map, reliability --> P6
+    CTGD -- features, NSP --> P10
+    P10 -- XGBoost model --> CTGK
+    P10 -- CTG metrics --> MET
+    U -- CTG features --> P11
+    CTGK -- model --> P11
+    P11 -- class, probabilities, SHAP --> P6
+    P6 -- plane status, HC z, reliability, CTG class --> P12
+    P12 -- level, drivers, caveats --> P6
     MET -- test metrics --> P6
     P6 -- overlay, metrics, report --> U
 ```
@@ -381,7 +459,8 @@ flowchart LR
 
 ```text
 ml/         masks, metrics, dataset, split, model, train, evaluate, geometry, inference, intergrowth,
-            planes, train_planes, evaluate_planes (Feature A), uncertainty, evaluate_uncertainty (Feature B)
+            planes, train_planes, evaluate_planes (Feature A), uncertainty, evaluate_uncertainty (Feature B),
+            ctg, train_ctg, fusion (Feature C)
 backend/    FastAPI app: api/ (routes, deps), core/ (config, errors, logging), schemas/, services/
 frontend/   Next.js app: src/app (pages), src/components (+ ui/), src/lib (API client, pixel-size lookup)
 dashboard/  Streamlit research dashboard (uses ml.inference)

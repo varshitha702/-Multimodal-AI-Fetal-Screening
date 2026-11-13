@@ -1,0 +1,51 @@
+{
+  "model": "XGBoost (multi:softprob), balanced class weights from train",
+  "classes": [
+    "Normal",
+    "Suspect",
+    "Pathological"
+  ],
+  "features": [
+    "LB",
+    "AC",
+    "FM",
+    "UC",
+    "DL",
+    "DS",
+    "DP",
+    "ASTV",
+    "MSTV",
+    "ALTV",
+    "MLTV",
+    "Width",
+    "Min",
+    "Max",
+    "Nmax",
+    "Nzeros",
+    "Mode",
+    "Mean",
+    "Median",
+    "Variance",
+    "Tendency"
+  ],
+  "best_iteration": 359,
+  "params": {
+    "colsample_bytree": 0.8,
+    "learning_rate": 0.05,
+    "max_depth": 4,
+    "n_estimators": 2000,
+    "subsample": 0.9
+  },
+  "test": {
+    "n": 321,
+    "accuracy": 0.9751,
+    "macro_f1": 0.963,
+    "macro_f1_ci95": [
+      0.9355,
+      0.9857
+    ],
+    "roc_auc_macro_ovr": 0.9866,
+    "pathological_recall": 1.0
+  },
+  "data": "UCI Cardiotocography (Ayres-de-Campos et al., 2000), 2,126 records, 70/15/15 stratified split"
+}

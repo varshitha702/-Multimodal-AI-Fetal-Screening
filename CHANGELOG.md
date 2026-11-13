@@ -21,9 +21,22 @@ All notable changes are listed here. Format: [Keep a Changelog](https://keepacha
   (95 % CI 0.11–0.41); flagged 11 %, MAE 3.68 vs 1.99 mm. API `uncertainty` field and block,
   `uncertainty_png_base64`; UI HC ± SD, reliability card, overlay toggle; T33–T38, Q01–Q09, E13–E15
   (137 total); ADR-0007.
+- **CTG branch and screening summary (Feature C):** UCI Cardiotocography loader (per-second features from the
+  `Data` sheet, duplicate-safe stratified 70/15/15 split); XGBoost with balanced class weights from train only,
+  compared with logistic regression and random forest. Held-out test: XGBoost macro-F1 0.963 (95 % CI
+  0.936–0.986), ROC-AUC 0.987, Pathological recall 27/27; SHAP top factors. Rule-based screening summary
+  (R1–R6; a pathological CTG always escalates; inputs not given are "not assessed"; different-patients caveat).
+  API `/ctg/predict` (422 on invalid features), `/ctg/examples`, `/screening/summary`, `ctg_model_loaded`,
+  `ctg_classifier`; UI CTG form with held-out examples, summary card, report section, model-page section;
+  T39–T45, C01–C08, F01–F14, E15–E18 (183 total); ADR-0008; `scripts/check_mermaid.py`.
 
 ### Changed
 - Response PNGs are encoded without `optimize` (about 7× faster, about 5 % larger).
+- New runtime dependencies: scikit-learn (< 1.8), scipy, xgboost, shap, xlrd.
+
+### Fixed
+- CTG model failed to load in the Docker image (scikit-learn 1.9 vs the xgboost 2.1 wrapper); it is now loaded
+  as a plain Booster truncated to the best iteration.
 
 ## [1.0.0] - 2026-11-12 (Phase-1 review build)
 

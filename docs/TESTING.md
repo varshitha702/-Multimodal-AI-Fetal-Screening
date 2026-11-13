@@ -8,25 +8,30 @@ Raw logs: `docs/evidence/pytest_run.txt`, `docs/evidence/frontend_smoke_run.txt`
 
 | Suite | Tool | Cases | Passed | Failed | Skipped |
 |---|---|---|---|---|---|
-| Backend API (T01–T38) | pytest + FastAPI TestClient | 44 (T18 and T24 have 4 inputs each) | 44 | 0 | 0 |
+| Backend API (T01–T45) | pytest + FastAPI TestClient | 62 (T18, T24 ×4; T40 ×8; T44 ×5 inputs) | 62 | 0 | 0 |
 | ML unit / integration (U01–U32) | pytest | 32 | 32 | 0 | 0 |
 | Plane quality gate (P01–P13) | pytest | 13 | 13 | 0 | 0 |
 | TTA uncertainty (Q01–Q09) | pytest | 14 (Q01 has 6 transforms) | 14 | 0 | 0 |
+| CTG branch (C01–C08) | pytest | 8 | 8 | 0 | 0 |
+| Screening summary rules (F01–F14) | pytest | 16 (F05, F07 ×2) | 16 | 0 | 0 |
 | INTERGROWTH-21st verification (G01–G08) | pytest | 14 (incl. all 189 published table cells) | 14 | 0 | 0 |
 | Frontend smoke (S1–S3) | `node --test` against `next start` | 3 | 3 | 0 | 0 |
-| End-to-end UI (E01–E17) | Playwright + Chrome, live backend and GPU models | 17 | 17 | 0 | 0 |
-| **Total** | | **137** | **137** | **0** | **0** |
+| End-to-end UI (E01–E21) | Playwright + Chrome, live backend and GPU models | 21 | 21 | 0 | 0 |
+| **Total** | | **183** | **183** | **0** | **0** |
 
 Feature A (standard-plane gate) added T26–T32, P01–P13 and the plane steps in E03, E04, E12 and E13;
 Feature B (TTA uncertainty) added T33–T38, Q01–Q09 and E13–E15. The Python suite is **117 passed** locally
 (`docs/evidence/pytest_run.txt`). The API contract tests send `uncertainty=false` by default (8 CPU passes per
 request would make them slow); T33–T38 exercise the TTA path.
+Feature C (CTG + screening summary) added T39–T45, C01–C08, F01–F14 and E15–E18. The Python suite is
+**159 passed** locally (`docs/evidence/pytest_run.txt`). The CTG model is committed, so the CTG API and model
+tests also run in CI; only C07–C08 need the raw `CTG.xls` (skipped in CI like the other *data* tests).
 
 Static checks: `ruff check .` (Python) clean; `npm run lint`, `npm run typecheck`, `npm run build` clean.
 
 Screenshot of the pytest run: `docs/screenshots/test_run_pytest.png`.
 
-**GitHub Actions CI** (run 43270591582, PR #13 TTA uncertainty): Python job **113 passed, 4 skipped**, ruff clean, frontend job passed. PR #12 plane gate (run 43262443536): Python job **93 passed, 4 skipped**, ruff clean, frontend job passed. Before that (run 43239985081): Python job **73 passed, 4 skipped** (51 + 4 skipped before step 5, run
+**GitHub Actions CI** (run 43357597190, PR #14 CTG + screening summary): Python job **153 passed, 6 skipped** (the 4 *data*/checkpoint tests below plus C07–C08, which need `CTG.xls`), ruff clean, frontend job passed. PR #13 TTA uncertainty (run 43270591582): Python job **113 passed, 4 skipped**, ruff clean, frontend job passed. PR #12 plane gate (run 43262443536): Python job **93 passed, 4 skipped**, ruff clean, frontend job passed. Before that (run 43239985081): Python job **73 passed, 4 skipped** (51 + 4 skipped before step 5, run
 43235961106), ruff clean; frontend job lint + build + smoke passed. The dataset and trained checkpoint are not in the repository, so the four tests
 that need them (U05, U14, U27, U32, marked *data* below) are skipped in CI and run locally. The API tests never
 need them: they use a randomly initialised checkpoint created in a temp folder.
@@ -83,6 +88,13 @@ python scripts/ui_e2e.py
 | T36 | Boundary | No calibration file | No flag, `thresholds=null` | Pass |
 | T37 | Normal | Plane gate warns + TTA | TTA HC mean/SD/passes withheld with the measurement; disagreement still reported | Pass |
 | T38 | Normal/negative | `/model-info`; `uncertainty=sometimes` | `uncertainty` info (8 passes, primary HC); 422 | Pass |
+| T39 | Normal | `/ctg/examples` and `/ctg/predict` for each of the 6 held-out examples | Predicted class = expert label; probabilities sum to 1; 5 SHAP factors; different-patients note | Pass |
+| T40 | Negative | CTG body with a missing field, unknown field, LB 300, AC −0.1, ASTV 101, Tendency 2, `"abc"`, `"NaN"` | 422 `validation_error` (×8) | Pass |
+| T41 | Boundary | CTG model missing | `/health` → `ctg_model_loaded=false`; `/ctg/predict` → 503; `/screening/summary` still 200 | Pass |
+| T42 | Normal | Summary for normal / Pathological / Suspect / HC z −2.1 / plane warn / low reliability / empty | Routine / Urgent / Review ×4 / Insufficient data | Pass |
+| T43 | Normal | Summary with plane warn + withheld + Pathological CTG | Drivers R1 then R4; HC centile not assessed; 6 rules; caveat; disclaimer | Pass |
+| T44 | Negative | Summary with invalid CTG class, plane status, centile 120, probability 1.5, unknown field | 422 (×5) | Pass |
+| T45 | Normal | `/model-info`, `/openapi.json` | `ctg_classifier` with test macro-F1 > 0.9 and 3-model comparison; CTG and summary paths documented | Pass |
 
 The API tests use random-weight checkpoints written to a temp folder, so the gate outcome is forced through the
 stored threshold (0 → always pass, 1.01 → always warn). They test the contract, not classifier accuracy.
@@ -173,6 +185,38 @@ intergrowth21.com `grow_fetal-zs_hc_table.pdf`).
 | Q08 | Reliability reasons: CV, disagreement, failed fits; no calibration → no flag | Pass |
 | Q09 | Uncertainty heat-map overlay keeps the image where SD = 0 | Pass |
 
+## CTG test cases (`tests/test_ctg.py`)
+
+| ID | Case | Result |
+|---|---|---|
+| C01 | 21 feature definitions in UCI order with valid ranges | Pass |
+| C02 | Split keeps duplicate records together, ~70/15/15, stratified, deterministic (synthetic data) | Pass |
+| C03 | Committed model and examples exist; examples cover all classes and come from the test split | Pass |
+| C04 | Each held-out example is predicted as its expert label; probabilities sum to 1 | Pass |
+| C05 | Top SHAP factors sorted by magnitude with valid feature names and directions | Pass |
+| C06 | Prediction is deterministic | Pass |
+| C07 | *data*: 2,126 records, NSP counts 1,655 / 295 / 176, AC is a per-second rate | Pass |
+| C08 | *data*: committed split equals the regenerated split | Pass |
+
+## Screening summary test cases (`tests/test_fusion.py`)
+
+| ID | Case | Result |
+|---|---|---|
+| F01 | All inputs unremarkable → Routine, nothing missing | Pass |
+| F02 | R1: pathological CTG → Urgent review | Pass |
+| F03 | R1 wins over R3/R4/R5 and is listed first | Pass |
+| F04 | R2: suspect CTG → Review recommended | Pass |
+| F05 | R3: HC z −1.9 / +2.4 → Review recommended (×2) | Pass |
+| F06 | R3 boundary: \|z\| = 1.88 stays Routine | Pass |
+| F07 | R4: plane warn with withheld / overridden measurement (×2) | Pass |
+| F08 | R5: low reliability → Review recommended | Pass |
+| F09 | Missing inputs are listed as not assessed, not assumed normal | Pass |
+| F10 | Ultrasound only and CTG only | Pass |
+| F11 | No input → Insufficient data | Pass |
+| F12 | Unavailable plane check → not assessed | Pass |
+| F13 | Caveat states that the data come from different patients | Pass |
+| F14 | Unknown CTG class / plane status rejected | Pass |
+
 ## Frontend smoke test (`frontend/tests/smoke.test.mjs`)
 
 | ID | Case | Result |
@@ -202,9 +246,13 @@ Real Chrome, real backend, trained models on the GPU. Demo image `006_HC.png` is
 | E12 | GA 20+0 (example input; HC18 has no GA) on `544_HC.png` → plane check PASS, centile card (42nd) and chart | Pass |
 | E13 | `544_HC.png`: HC shown as HC ± TTA SD (170.9 ± 1.6 mm), reliability OK | Pass |
 | E14 | Overlay toggle switches to the TTA uncertainty map | Pass |
-| E15 | `794_HC.png` (held-out test, passes the plane gate): reliability "Low: re-scan" and the quality warning | Pass |
-| E16 | FETAL_PLANES_DB test femur image → plane check WARN ("femur"), HC withheld | Pass |
-| E17 | Swagger UI lists the endpoints | Pass |
+| E15 | Screening summary "Routine" from the ultrasound result alone; CTG listed as not assessed | Pass |
+| E16 | Normal CTG example (held-out test) → NORMAL; summary Routine with every input assessed | Pass |
+| E17 | Pathological CTG example → PATHOLOGICAL with SHAP factors; summary escalates to Urgent review (R1); printed report includes it | Pass |
+| E18 | Out-of-range CTG input (LB 400 bpm) rejected in the form | Pass |
+| E19 | `794_HC.png` (held-out test, passes the plane gate): reliability "Low: re-scan" and the quality warning | Pass |
+| E20 | FETAL_PLANES_DB test femur image → plane check WARN ("femur"), HC withheld | Pass |
+| E21 | Swagger UI lists the endpoints | Pass |
 
 The Phase-1 E01–E12 (before the plane gate) also passed against the **Docker Compose** stack:
 `docs/evidence/ui_e2e_docker_run.txt`.

@@ -15,6 +15,7 @@ class HealthResponse(BaseModel):
     status: Literal["ok", "degraded"]
     model_loaded: bool
     plane_model_loaded: bool = Field(description="Standard-plane classifier loaded (quality gate active)")
+    ctg_model_loaded: bool = Field(description="CTG classifier loaded (CTG endpoints available)")
     version: str
 
 
@@ -34,6 +35,7 @@ class ModelInfo(BaseModel):
         default=None, description="Standard-plane gate: checkpoint details and official-test metrics, if loaded")
     uncertainty: dict | None = Field(
         default=None, description="TTA reliability thresholds (validation) and held-out test evaluation, if available")
+    ctg_classifier: dict | None = Field(default=None, description="CTG XGBoost model and held-out test metrics")
     disclaimer: str = DISCLAIMER
 
 

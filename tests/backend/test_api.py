@@ -73,7 +73,8 @@ def post(client, data: bytes, content_type="image/png", name="scan.png", **form)
 def test_T01_health_ok_when_model_loaded(client):
     r = client.get("/api/v1/health")
     assert r.status_code == 200
-    assert r.json() == {"status": "ok", "model_loaded": True, "plane_model_loaded": False, "version": "1.0.0"}
+    assert r.json() == {"status": "ok", "model_loaded": True, "plane_model_loaded": False,
+                        "ctg_model_loaded": True, "version": "1.0.0"}
 
 
 def test_T02_model_info(client):
@@ -372,3 +373,90 @@ def test_T38_model_info_uncertainty_and_bad_flag(client):
     r = client.post("/api/v1/predict", files={"file": ("a.png", png_bytes(), "image/png")},
                     data={"uncertainty": "sometimes"})
     assert r.status_code == 422
+
+
+# --- CTG branch and screening summary (Feature C) ---------------------------------------------------
+
+def ctg_examples(c):
+    return c.get("/api/v1/ctg/examples").json()
+
+
+def test_T39_ctg_predict_examples(client):
+    examples = ctg_examples(client)
+    assert len(examples) == 6 and {e["label"] for e in examples} == {"Normal", "Suspect", "Pathological"}
+    assert all(e["split"] == "test" for e in examples)
+    for e in examples:
+        r = client.post("/api/v1/ctg/predict", json=e["features"])
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["predicted_class"] == e["label"]
+        assert sum(body["probabilities"].values()) == pytest.approx(1, abs=1e-3)
+        assert len(body["top_factors"]) == 5 and "different patients" in body["note"]
+
+
+@pytest.mark.parametrize("change", [
+    {"drop": "LB"},                      # missing field
+    {"set": ("extra_feature", 1.0)},     # unknown field
+    {"set": ("LB", 300)},                # above range (50-240 bpm)
+    {"set": ("AC", -0.1)},               # negative rate
+    {"set": ("ASTV", 101)},              # percentage > 100
+    {"set": ("Tendency", 2)},            # outside -1..1
+    {"set": ("MSTV", "abc")},            # not a number
+    {"set": ("Mean", "NaN")},            # NaN rejected
+])
+def test_T40_ctg_invalid_input_422(client, change):
+    feats = dict(ctg_examples(client)[0]["features"])
+    if "drop" in change:
+        feats.pop(change["drop"])
+    else:
+        k, v = change["set"]
+        feats[k] = v
+    r = client.post("/api/v1/ctg/predict", json=feats)
+    assert r.status_code == 422 and r.json()["error"]["code"] == "validation_error"
+
+
+def test_T41_ctg_model_missing_gives_503_but_summary_works(checkpoint, tmp_path):
+    with make_client(checkpoint, ctg_model_path=tmp_path / "none.json") as c:
+        assert c.get("/api/v1/health").json()["ctg_model_loaded"] is False
+        feats = ctg_examples(c)[0]["features"]
+        r = c.post("/api/v1/ctg/predict", json=feats)
+        assert r.status_code == 503 and r.json()["error"]["code"] == "model_not_loaded"
+        assert c.post("/api/v1/screening/summary", json={"ctg_class": "Normal"}).status_code == 200
+
+
+def test_T42_screening_summary_levels(client):
+    def level(body):
+        return client.post("/api/v1/screening/summary", json=body).json()["level"]
+
+    normal = {"plane_status": "pass", "hc_z_score": 0.2, "hc_centile": 57.9, "low_reliability": False,
+              "ctg_class": "Normal", "ctg_probability": 0.99}
+    assert level(normal) == "Routine"
+    assert level({**normal, "ctg_class": "Pathological"}) == "Urgent review"
+    assert level({**normal, "ctg_class": "Suspect"}) == "Review recommended"
+    assert level({**normal, "hc_z_score": -2.1}) == "Review recommended"
+    assert level({**normal, "plane_status": "warn"}) == "Review recommended"
+    assert level({**normal, "low_reliability": True}) == "Review recommended"
+    assert level({}) == "Insufficient data"
+
+
+def test_T43_screening_summary_explains_itself(client):
+    body = client.post("/api/v1/screening/summary", json={
+        "plane_status": "warn", "measurement_withheld": True, "ctg_class": "Pathological"}).json()
+    assert [d["rule"] for d in body["drivers"]] == ["R1", "R4"]
+    assert any("HC centile" in m for m in body["not_assessed"])
+    assert len(body["rules"]) == 6 and any("different patients" in c for c in body["caveats"])
+    assert "not a medical device" in body["disclaimer"]
+
+
+@pytest.mark.parametrize("bad", [{"ctg_class": "Bad"}, {"plane_status": "maybe"}, {"hc_centile": 120},
+                                 {"ctg_probability": 1.5}, {"unknown": 1}])
+def test_T44_screening_summary_invalid_422(client, bad):
+    assert client.post("/api/v1/screening/summary", json=bad).status_code == 422
+
+
+def test_T45_model_info_and_openapi_include_ctg(client):
+    info = client.get("/api/v1/model-info").json()["ctg_classifier"]
+    assert info["test"]["macro_f1"] > 0.9 and set(info["comparison_test_macro_f1"]) == {
+        "logistic_regression", "random_forest", "xgboost"}
+    paths = client.get("/openapi.json").json()["paths"]
+    assert {"/api/v1/ctg/predict", "/api/v1/ctg/examples", "/api/v1/screening/summary"} <= set(paths)

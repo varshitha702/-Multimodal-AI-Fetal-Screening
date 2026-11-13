@@ -12,12 +12,15 @@ Base URL (local): `http://localhost:8000`. Interactive docs: `/docs` (Swagger UI
 | GET | `/api/v1/model-info` | Architecture, checkpoint, validation Dice, held-out test metrics |
 | POST | `/api/v1/predict` | **Plane check**, then segment the fetal head, measure head circumference, optional GA centile, **HC ± SD by test-time augmentation** |
 | POST | `/api/v1/plane-check` | Only the standard-plane quality gate (which plane is this; is it trans-thalamic?) |
+| POST | `/api/v1/ctg/predict` | CTG record (21 features, JSON) → Normal / Suspect / Pathological + top SHAP factors |
+| GET | `/api/v1/ctg/examples` | Six held-out test CTG records (two per class) for the UI's "load example" |
+| POST | `/api/v1/screening/summary` | Rule-based combined summary: Routine / Review recommended / Urgent review |
 | GET | `/api/v1/reference/hc-centiles` | INTERGROWTH-21st HC centile curves (3rd/10th/50th/90th/97th), 14–40 weeks |
 
 ### GET /api/v1/health
 
 ```json
-{ "status": "ok", "model_loaded": true, "plane_model_loaded": true, "version": "1.0.0" }
+{ "status": "ok", "model_loaded": true, "plane_model_loaded": true, "ctg_model_loaded": true, "version": "1.0.0" }
 ```
 
 Always returns 200 while the process is up; `status` is `"degraded"` when the segmentation checkpoint failed to
@@ -30,7 +33,8 @@ Returns `name`, `architecture`, `input_size`, `device`, `checkpoint_epoch`, `val
 `test_metrics` (contents of `outputs/test_metrics.json`), `training_data`, `intended_use`, `disclaimer`, and
 `plane_classifier` (architecture, epoch, temperatures, `tt_threshold`, threshold rule and official-test metrics
 from `outputs/plane_metrics.json`; `null` if the plane model is not loaded), and `uncertainty` (TTA passes,
-validation thresholds, held-out test evaluation; `null` without `outputs/uncertainty_calibration.json`).
+validation thresholds, held-out test evaluation; `null` without `outputs/uncertainty_calibration.json`), and
+`ctg_classifier` (XGBoost details, held-out test metrics and the test macro-F1 of all three compared models).
 503 if the model is not loaded.
 
 ### POST /api/v1/predict
@@ -139,6 +143,64 @@ Latency (one 800 × 540 image): plane check 31 ms on CPU / 61 ms on the RTX 4050
 (curl to `127.0.0.1`): Docker CPU backend 0.22–0.24 s with `uncertainty=false`, 0.99–1.06 s with TTA; laptop GPU
 server 0.40–0.44 s and 1.21–1.28 s (`docs/evidence/docker_tta_latency.txt`).
 
+### POST /api/v1/ctg/predict
+
+JSON body with exactly the 21 SisPorto features (UCI order; AC, FM, UC, DL, DS, DP are **events per second**).
+Every field is required, numeric and range-checked (e.g. `LB` 50–240 bpm, rates 0–1 /s, `ASTV`/`ALTV` 0–100 %,
+`Tendency` −1…1; full list in `ml/ctg.py`). Missing, extra, non-numeric, NaN or out-of-range fields → **422**.
+503 if the CTG model is not loaded. Real response for held-out test record `CTG1955` (expert label
+Pathological; top factors shortened to 2 of 5):
+
+```bash
+curl -X POST http://localhost:8000/api/v1/ctg/predict -H "Content-Type: application/json" -d '{"LB": 133, "AC": 0,
+  "FM": 0, "UC": 0.010089686, "DL": 0.002242152, "DS": 0, "DP": 0.002242152, "ASTV": 60, "MSTV": 3, "ALTV": 0,
+  "MLTV": 0, "Width": 105, "Min": 60, "Max": 165, "Nmax": 5, "Nzeros": 0, "Mode": 125, "Mean": 97, "Median": 105,
+  "Variance": 80, "Tendency": 0}'
+```
+
+```json
+{ "predicted_class": "Pathological",
+  "probabilities": { "Normal": 0.0001, "Suspect": 0.0, "Pathological": 0.9999 },
+  "top_factors": [
+    { "feature": "Median", "description": "FHR histogram median", "unit": "bpm", "value": 105.0, "shap": 1.8512, "direction": "towards" },
+    { "feature": "Mean", "description": "FHR histogram mean", "unit": "bpm", "value": 97.0, "shap": 1.5547, "direction": "towards" } ],
+  "model_version": "ctg-xgboost-it359",
+  "note": "The CTG model (UCI Cardiotocography) and the ultrasound models (HC18, FETAL_PLANES_DB) were trained on different patients.",
+  "disclaimer": "Academic research prototype, not a medical device. ..." }
+```
+
+`shap` is the contribution (log-odds) toward the predicted class. About 30 ms per record on the Docker CPU backend.
+
+### GET /api/v1/ctg/examples
+
+`[{"record": "CTG0908", "label": "Normal", "split": "test", "features": {...}}, ...]`: two correctly classified
+records per class from the held-out test split.
+
+### POST /api/v1/screening/summary
+
+JSON body, every field optional (take the values from `/predict` and `/ctg/predict`): `plane_status`
+(`pass`/`warn`/`unavailable`), `plane_overridden`, `measurement_withheld`, `hc_mm`, `hc_z_score`, `hc_centile`,
+`low_reliability`, `ctg_class`, `ctg_probability`. Unknown fields or invalid values → 422. Rules (R1–R6, most
+severe wins): pathological CTG → Urgent review; suspect CTG, HC outside the 3rd–97th centile, plane warning or
+low reliability → Review recommended; otherwise Routine. Missing inputs are listed as `not_assessed`. Real
+response:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/screening/summary -H "Content-Type: application/json" \
+  -d '{"plane_status": "warn", "measurement_withheld": true, "ctg_class": "Suspect", "ctg_probability": 0.9986}'
+```
+
+```json
+{ "level": "Review recommended",
+  "drivers": [
+    { "input": "CTG", "finding": "Suspect (p = 1.00)", "level": "Review recommended", "rule": "R2" },
+    { "input": "Plane check", "finding": "Trans-thalamic plane not confirmed (measurement withheld); re-acquire", "level": "Review recommended", "rule": "R4" } ],
+  "unremarkable": [],
+  "not_assessed": ["HC centile (measurement withheld)", "Measurement uncertainty (TTA not run)"],
+  "rules_version": "fusion-rules-1", "rules": ["R1 CTG Pathological -> Urgent review ...", "..."],
+  "caveats": ["The ultrasound and CTG models were trained on different patients (HC18 / FETAL_PLANES_DB vs UCI CTG); there is no paired data, so these fusion rules are illustrative and the combined level is not calibrated. ...", "..."] }
+```
+
 ## Errors
 
 All errors share one format:
@@ -153,7 +215,7 @@ All errors share one format:
 | 413 | `file_too_large` | Upload larger than `FETALAI_MAX_UPLOAD_MB` (default 10). Read in 1 MB chunks and rejected as soon as the limit is passed |
 | 415 | `unsupported_media_type` | Declared type is not `image/png` / `image/jpeg`, or the decoded format is not PNG/JPEG (e.g. a GIF renamed `.png`) |
 | 422 | `validation_error` | Missing `file`, `pixel_size_mm` not a number in (0, 1], `gestational_age_weeks` not in [14, 40], or `override_plane_check` / `uncertainty` not a boolean. `details` lists the field and reason |
-| 503 | `model_not_loaded` | Checkpoint missing or failed to load at startup |
+| 503 | `model_not_loaded` | Checkpoint missing or failed to load at startup (`/ctg/predict`: CTG model missing) |
 
 ## Configuration
 
@@ -163,6 +225,7 @@ Environment variables (or `.env`, see `.env.example`):
 |---|---|
 | `FETALAI_CHECKPOINT_PATH` | `outputs/hc18_unet_best.pth` |
 | `FETALAI_PLANE_CHECKPOINT_PATH` | `outputs/plane_classifier_best.pth` (optional; gate `unavailable` without it) |
+| `FETALAI_CTG_MODEL_PATH` | `outputs/ctg_xgb.json` (committed; CTG endpoints return 503 without it) |
 | `FETALAI_DEVICE` | automatic (`cuda` if available) |
 | `FETALAI_MAX_UPLOAD_MB` | `10` |
 | `FETALAI_CORS_ORIGINS` | `["http://localhost:3000","http://127.0.0.1:3000"]` |

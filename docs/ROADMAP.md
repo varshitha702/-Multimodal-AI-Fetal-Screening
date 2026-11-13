@@ -21,7 +21,7 @@
 |---|---|---|
 | **A. Standard-plane quality gate** (FETAL_PLANES_DB, two-head EfficientNet-B0, temperature scaling, gate in `/predict`, UI badge, override) | Done | `docs/MODEL_CARD.md` (plane acc 94.0 %, ECE 0.014, TT accepted 95.7 %, HC18 accepted 60.3 %), ADR-0006 |
 | **B. Measurement uncertainty** (8-pass test-time augmentation, HC ± SD, uncertainty map, validation-chosen low-reliability flag) | Done | `docs/MODEL_CARD.md` addendum (Spearman ρ 0.27, flagged MAE 3.68 vs 1.99 mm), ADR-0007 |
-| C. CTG branch + rule-based screening summary | Planned | |
+| **C. CTG branch + rule-based screening summary** (XGBoost vs LR/RF, SHAP, `/ctg/predict`, `/screening/summary`, CTG form, summary card) | Done | `docs/MODEL_CARD.md` (CTG macro-F1 0.963, Pathological recall 27/27), ADR-0008 |
 
 
 ## Phase 2 (remaining 30 %)
@@ -29,8 +29,9 @@
 1. **Plane gate on local data.** The gate (done, see above) accepts only 60 % of HC18 images because of
    domain shift and early gestation; fine-tune and re-validate it on paired local hospital images, and add
    within-plane quality scoring (landmarks, symmetry).
-2. **CTG (cardiotocography) branch** with confidence-aware decision-level fusion with the ultrasound branch
-   (the "multimodal" part of the project title).
+2. **Learned multimodal fusion.** The CTG branch and a rule-based summary are done (see above); with paired
+   ultrasound + CTG data from the same pregnancies (ethics approval needed), learn feature-level fusion and
+   calibrate the combined risk; validate the CTG model on external tracings.
 3. **Better uncertainty.** TTA is done (modest correlation with error, ρ 0.27); next: MC dropout or deep
    ensembles, and calibrating the SD into a prediction interval on paired local data.
 4. **Stronger model and validation.** Pretrained-encoder U-Net (e.g. ResNet/EfficientNet encoder), k-fold
