@@ -1,0 +1,9 @@
+# Docker backend image (CPU): CTG and screening endpoints, 13 Nov 2026
+POST /ctg/predict CTG0908 (expert Normal) -> Normal p=0.9999, top factor AC, 34 ms
+POST /ctg/predict CTG0162 (expert Normal) -> Normal p=0.9999, top factor AC, 28 ms
+POST /ctg/predict CTG0349 (expert Suspect) -> Suspect p=0.9986, top factor ALTV, 43 ms
+POST /ctg/predict CTG0286 (expert Suspect) -> Suspect p=0.9984, top factor ALTV, 34 ms
+POST /ctg/predict CTG1955 (expert Pathological) -> Pathological p=0.9999, top factor Median, 26 ms
+POST /ctg/predict CTG0774 (expert Pathological) -> Pathological p=0.9995, top factor ALTV, 25 ms
+POST /screening/summary (plane pass, z -0.21, reliable, CTG Pathological) -> Urgent review ['R1']
+POST /ctg/predict with LB=400 -> 422 validation_error
