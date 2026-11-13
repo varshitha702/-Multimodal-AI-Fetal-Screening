@@ -187,7 +187,7 @@ export function CtgPanel({ result, onResult }: Props) {
                 {result.top_factors.map((f) => (
                   <li key={f.feature} className="flex flex-wrap justify-between gap-2">
                     <span>
-                      {f.description} ({f.feature} = {f.value}
+                      {f.description} ({f.feature} = {Number(f.value.toPrecision(4))}
                       {f.unit ? ` ${f.unit}` : ""})
                     </span>
                     <span className={cn("tabular-nums", f.shap > 0 ? "text-red-600" : "text-emerald-600")}>

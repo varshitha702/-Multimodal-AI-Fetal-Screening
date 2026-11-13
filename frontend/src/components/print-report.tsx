@@ -97,7 +97,7 @@ export function PrintReport({ result, originalUrl, fileName, ctg, summary }: Pro
             {(ctg.probabilities.Pathological * 100).toFixed(1)}%). Top factors:{" "}
             {ctg.top_factors
               .slice(0, 3)
-              .map((f) => `${f.feature} = ${f.value} (${f.shap > 0 ? "+" : ""}${f.shap.toFixed(2)})`)
+              .map((f) => `${f.feature} = ${Number(f.value.toPrecision(4))} (${f.shap > 0 ? "+" : ""}${f.shap.toFixed(2)})`)
               .join(", ")}
             .
           </p>
