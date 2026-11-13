@@ -31,7 +31,7 @@ Static checks: `ruff check .` (Python) clean; `npm run lint`, `npm run typecheck
 
 Screenshot of the pytest run: `docs/screenshots/test_run_pytest.png`.
 
-**GitHub Actions CI** (run 43270591582, PR #13 TTA uncertainty): Python job **113 passed, 4 skipped**, ruff clean, frontend job passed. PR #12 plane gate (run 43262443536): Python job **93 passed, 4 skipped**, ruff clean, frontend job passed. Before that (run 43239985081): Python job **73 passed, 4 skipped** (51 + 4 skipped before step 5, run
+**GitHub Actions CI** (run 43357597190, PR #14 CTG + screening summary): Python job **153 passed, 6 skipped** (the 4 *data*/checkpoint tests below plus C07–C08, which need `CTG.xls`), ruff clean, frontend job passed. PR #13 TTA uncertainty (run 43270591582): Python job **113 passed, 4 skipped**, ruff clean, frontend job passed. PR #12 plane gate (run 43262443536): Python job **93 passed, 4 skipped**, ruff clean, frontend job passed. Before that (run 43239985081): Python job **73 passed, 4 skipped** (51 + 4 skipped before step 5, run
 43235961106), ruff clean; frontend job lint + build + smoke passed. The dataset and trained checkpoint are not in the repository, so the four tests
 that need them (U05, U14, U27, U32, marked *data* below) are skipped in CI and run locally. The API tests never
 need them: they use a randomly initialised checkpoint created in a temp folder.
