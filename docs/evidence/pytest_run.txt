@@ -167,4 +167,4 @@ tests/test_uncertainty.py::test_tta_rejects_colour PASSED                [ 98%]
 tests/test_uncertainty.py::test_reliability_reasons_use_both_thresholds PASSED [ 99%]
 tests/test_uncertainty.py::test_uncertainty_overlay_shape PASSED         [100%]
 
-============================ 159 passed in 54.67s =============================
+======================= 159 passed in 79.65s (0:01:19) ========================

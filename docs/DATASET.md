@@ -129,7 +129,7 @@ anonymisation boxes. Both affect how often the gate accepts HC18 images (see `do
 ## Source
 
 D. Ayres-de-Campos, J. Bernardes, A. Garrido, J. Marques-de-Sá, L. Pereira-Leite, "SisPorto 2.0: a program for
-automated analysis of cardiotocograms", *J Matern Fetal Med* 9(5):311-318, 2000. UCI Machine Learning
+automated analysis of cardiotocograms", *J Matern Fetal Med* 9(5):311-318, 2000 (PMID 11132590). UCI Machine Learning
 Repository, dataset 193 "Cardiotocography" (CC BY 4.0), file `CTG.xls`. Not committed (`data/raw/` is
 gitignored); download: `https://archive.ics.uci.edu/static/public/193/cardiotocography.zip` into
 `data/raw/CTG/`.
