@@ -31,21 +31,33 @@ before(async () => {
 
 after(() => server?.kill());
 
-test("S1 home page renders the analyser and the disclaimer", async () => {
+test("S1 landing page renders the pitch, the hero scan and the disclaimer", async () => {
   const html = await (await fetch(BASE)).text();
-  assert.match(html, /Fetal head circumference/);
+  assert.match(html, /Measure only/);
   assert.match(html, /not a medical device/);
-  assert.match(html, /Drop an ultrasound image here/);
-  assert.match(html, /Pixel spacing \(mm \/ pixel\)/);
+  assert.match(html, /Open the workstation/);
+  assert.match(html, /What we do not claim/);
 });
 
-test("S2 model page renders", async () => {
-  const res = await fetch(`${BASE}/model`);
-  assert.equal(res.status, 200);
-  assert.match(await res.text(), /held-out test split/);
+test("S2 workspace pages render", async () => {
+  const pages = {
+    "/scan": /Drop an ultrasound image here/,
+    "/ctg": /Cardiotocography classification/,
+    "/report": /One summary, every reason shown/,
+    "/evidence": /Every claim, with its numbers/,
+  };
+  for (const [path, re] of Object.entries(pages)) {
+    const res = await fetch(`${BASE}${path}`);
+    assert.equal(res.status, 200, path);
+    assert.match(await res.text(), re, path);
+  }
+  const scan = await (await fetch(`${BASE}/scan`)).text();
+  assert.match(scan, /Pixel spacing \(mm \/ pixel\)/);
 });
 
-test("S3 unknown route returns 404", async () => {
-  const res = await fetch(`${BASE}/does-not-exist`);
-  assert.equal(res.status, 404);
+test("S3 old /model link redirects to /evidence; unknown route returns 404", async () => {
+  const res = await fetch(`${BASE}/model`, { redirect: "manual" });
+  assert.ok([307, 308].includes(res.status), String(res.status));
+  assert.match(res.headers.get("location") ?? "", /\/evidence$/);
+  assert.equal((await fetch(`${BASE}/does-not-exist`)).status, 404);
 });
