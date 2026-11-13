@@ -13,7 +13,7 @@ function ordinal(n: number) {
 export function GrowthPanel({ growth, hcMm }: { growth: Growth; hcMm: number }) {
   const centileText = growth.centile < 1 ? "<1st" : growth.centile > 99 ? ">99th" : ordinal(growth.centile);
   return (
-    <Card data-testid="growth-panel">
+    <Card data-testid="growth-panel" className="rounded-2xl bg-card/70">
       <CardHeader>
         <CardTitle className="text-base">Head circumference for gestational age</CardTitle>
         <CardDescription>
@@ -22,7 +22,7 @@ export function GrowthPanel({ growth, hcMm }: { growth: Growth; hcMm: number }) 
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3">
           <MetricCard label="Centile" value={centileText} hint={`z-score ${growth.z_score >= 0 ? "+" : ""}${growth.z_score.toFixed(2)}`} highlight />
           <MetricCard label="Standard median" value={growth.median_mm.toFixed(1)} unit="mm" hint="50th centile at this GA" />
           <MetricCard label="3rd – 97th centile" value={`${growth.p3_mm.toFixed(0)}–${growth.p97_mm.toFixed(0)}`} unit="mm" />

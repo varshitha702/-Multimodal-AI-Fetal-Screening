@@ -199,6 +199,10 @@
 @keyframes blink {
   50% { opacity: 0; }
 }
+@keyframes scan {
+  0% { top: -25%; }
+  100% { top: 100%; }
+}
 @keyframes grow {
   from { width: 0; }
   to { width: 100%; }
