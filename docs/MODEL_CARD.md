@@ -282,3 +282,81 @@ path.
   boundary has a low SD). It is not a calibrated confidence interval.
 * Thresholds come from 152 validation images of one dataset; they are not validated on other scanners.
 * The transforms (flip, ±10 % zoom, gamma) are a design choice; other choices would give other SDs.
+
+---
+
+# Model card: CTG classifier and screening summary (Feature C)
+
+> Same disclaimer: research prototype, not a medical device.
+
+Owners: Yashwanth Gowda M N (CTG model and tests), Vishwas K (API and fusion endpoint), Rakshitha V (UI).
+
+## CTG classifier (`ml/ctg.py`, `ml/train_ctg.py`)
+
+| | |
+|---|---|
+| Task | Classify one CTG record as Normal / Suspect / Pathological (NSP, expert consensus label) |
+| Input | The 21 SisPorto features of the UCI Cardiotocography dataset (AC…DP as events per second); API ranges in `ml/ctg.py` |
+| Deployed model | XGBoost (`multi:softprob`, depth 4, learning rate 0.05, subsample 0.9, colsample 0.8), early-stopped on validation log-loss at iteration 359; saved truncated to that iteration (`outputs/ctg_xgb.json`, committed) |
+| Imbalance | "Balanced" sample weights computed from the **train** split only; no resampling |
+| Explanations | SHAP TreeExplainer on the same trees; the API returns the 5 largest contributions toward the predicted class |
+| Latency | about 30 ms per record in the Docker CPU backend |
+
+**Data and split.** UCI Cardiotocography (Ayres-de-Campos et al., 2000): 2,126 records, Normal 1,655 /
+Suspect 295 / Pathological 176. 70/15/15 split stratified by NSP, seed 42, with the 10 groups of identical
+records (22 rows) kept in one split (`data/splits/ctg_split.csv`). Hyper-parameters were fixed in advance; the
+validation split is used only for XGBoost early stopping.
+
+| Split | Normal | Suspect | Pathological | Total |
+|---|---|---|---|---|
+| train | 1,157 | 208 | 123 | 1,488 |
+| val | 247 | 44 | 26 | 317 |
+| test | 251 | 43 | 27 | 321 |
+
+**Held-out test results** (`outputs/ctg_metrics.json`; macro-F1 95 % CI by bootstrap):
+
+| Model | Accuracy | Macro-F1 (95 % CI) | ROC-AUC (macro OvR) | Suspect recall | Pathological recall |
+|---|---|---|---|---|---|
+| Logistic regression (standardised, balanced) | 0.857 | 0.778 (0.714–0.837) | 0.960 | 0.791 | 0.889 |
+| Random forest (500 trees, balanced) | 0.944 | 0.910 (0.866–0.949) | 0.988 | 0.721 | 0.963 |
+| **XGBoost (deployed)** | **0.975** | **0.963 (0.936–0.986)** | 0.987 | 0.884 | **1.000 (27/27)** |
+
+XGBoost per class (precision / recall): Normal 0.980 / 0.988, Suspect 0.927 / 0.884, Pathological 1.000 / 1.000.
+Confusion matrix (rows true, columns predicted; N, S, P): [248, 3, 0], [5, 38, 0], [0, 0, 27].
+
+**Honest reading.** 27/27 Pathological recall has a Wilson 95 % CI of 0.875–1.000: the test set has only 27
+pathological records. On the validation split XGBoost's macro-F1 was 0.918, so the test figure may be
+somewhat optimistic. Suspect is the hardest class (5 of 43 called Normal). Random forest has the same ROC-AUC
+but misses more Suspect records.
+
+**SHAP** (mean |SHAP| on the test split): Pathological is driven by Median, ASTV, ALTV and Mean FHR; Normal by
+accelerations (AC) and ASTV; Suspect by ALTV and AC. Figures: `docs/screenshots/ctg_confusion.png`,
+`docs/screenshots/ctg_shap_pathological.png`.
+
+## Screening summary (`ml/fusion.py`)
+
+Decision-level, **rule-based** fusion of the four outputs, most severe level wins:
+
+| Rule | Condition | Level |
+|---|---|---|
+| R1 | CTG Pathological | **Urgent review** (always escalates) |
+| R2 | CTG Suspect | Review recommended |
+| R3 | HC below the 3rd or above the 97th INTERGROWTH-21st centile (\|z\| > 1.88) | Review recommended |
+| R4 | Plane check did not confirm a trans-thalamic plane | Review recommended (re-acquire) |
+| R5 | TTA flags the HC measurement as low reliability | Review recommended (re-scan) |
+| R6 | Everything assessed is unremarkable | Routine |
+
+Inputs that were not provided are listed as **not assessed**, never assumed normal; with no input at all the
+level is "Insufficient data". Each response names the rules that fired.
+
+**Important limitation.** The ultrasound datasets (HC18, FETAL_PLANES_DB) and the CTG dataset (UCI) come from
+**different patients**. There is no paired record of a fetus's scan and CTG, so the fusion cannot be learned
+or calibrated, and the combined level has no measured accuracy. The rules are illustrative, chosen to be
+transparent and conservative (a pathological CTG can never be "reassured" by a normal scan). Learned
+(feature-level) fusion and its calibration are Phase-2 work and need paired clinical data with ethics approval.
+
+## Limitations of the CTG branch
+
+* SisPorto features from one Portuguese hospital (1990s data); other CTG systems compute features differently.
+* The NSP label is an expert consensus on the whole tracing, not an outcome (e.g. acidosis).
+* Not validated on any external CTG dataset.
