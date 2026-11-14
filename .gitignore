@@ -28,3 +28,6 @@ frontend/out/
 .pytest_cache/
 .ruff_cache/
 *.egg-info/
+
+# demo bundle (scripts/make_demo_bundle.ps1)
+dist/

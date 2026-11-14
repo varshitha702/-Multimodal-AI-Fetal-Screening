@@ -103,6 +103,17 @@ flowchart LR
 
 More diagrams (flowchart, UML use-case/class/sequence, DFD level 0/1): [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
+## One-click demo (any Windows laptop, no GPU needed)
+
+1. On the development machine: `powershell -ExecutionPolicy Bypass -File scripts\make_demo_bundle.ps1` builds
+   `dist\FetalAI-demo.zip` (about 55 MB). It holds the code, the trained models and `demo_samples\` (four dataset
+   images, each giving a different result: PASS, WARN with HC withheld, low reliability, wrong plane).
+2. On the demo laptop: install Python 3.11 (or 3.10/3.12) and Node.js 20+, unzip, double-click `start_fetalai.bat`.
+   The first run installs CPU PyTorch and the npm packages (internet, about 10–20 min), later runs start in under
+   a minute offline. The browser opens at http://localhost:3000; close the two server windows to stop.
+
+`demo_samples\README.txt` lists what to enter for each image and the expected output.
+
 ## Quickstart (Windows, from the repository root)
 
 Prerequisites: Python 3.11, Node 22, an NVIDIA GPU for training (inference also runs on CPU).
